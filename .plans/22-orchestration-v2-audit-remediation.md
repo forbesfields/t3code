@@ -16,7 +16,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Tracking checklist
 
-- [ ] 1. Honor `is_error` on Claude SDK results (runs marked completed on 401/529)
+- [x] 1. Honor `is_error` on Claude SDK results (runs marked completed on 401/529)
 - [ ] 2. Preserve real failure causes in projected errors (Claude adapter + ProviderFailure)
 - [ ] 3. Preserve cursor failure detail (requestId, durationMs, SDK `error_code`)
 - [ ] 4. Log failure/lifecycle frames in native provider logs
@@ -29,7 +29,9 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] 11. Assistant text segments merged without separator (fixed in worktree — add regression fixture)
 - [ ] 12. OpenCode `file_search` items drop error/output
 - [ ] 13. Low-severity backlog (see section)
-- [ ] 14. Cursor SDK unhandled `write EPIPE` crashes the backend child (recurring, post-SDK-bump)
+- [ ] 14. Cursor SDK unhandled `write EPIPE` crashes the backend child (recurring, post-SDK-bump) — reported upstream to Cursor, on hold
+- [x] 15. Stale Claude session: first message after idle gap always fails, retry succeeds
+- [ ] 16. Steering latency invisible: queued→steer offers sit unconsumed with no UI feedback
 
 ---
 
@@ -76,7 +78,11 @@ sqlite3 -readonly ~/.t3/userdata-v2/state.sqlite \
 grep 'api_error_status' ~/.t3/userdata-v2/logs/provider/thread-delegated-task-command-3amcp-3a1156181e-*.log
 ```
 
-- [ ] Status: not started
+- [x] Status: FIXED (commit 8188f974be) — `terminalStatusFromResult` honors `is_error`;
+      `providerFailureFromResult` keeps result text + `api_error_<status>` code, retryable for
+      429/529; ScheduleWakeup hold-open and result-text fallback gated on `!is_error`. Replay
+      fixture `claude_result_is_error` (from thread 47763f5e run 1). App-level error injection
+      not practical (needs a real 401 from the API); verified normal flows in-app instead.
 
 ## 2. Terminal failures persist only generic strings — root cause unrecoverable from DB
 
@@ -503,6 +509,62 @@ sqlite3 -readonly ~/.t3/userdata-v2/state.sqlite \
   "SELECT run_id,status,completed_at FROM orchestration_v2_projection_runs \
    WHERE thread_id IN ('d1bfdd3d-38cc-4ff3-ab75-8be6dc592b00','4f3381e5-89e2-45a8-bca1-bbe5d520bbba');"
 ```
+
+- [ ] Status: not started
+
+## 15. Stale Claude session: first message after idle gap always fails (FIXED)
+
+**Severity: high (recurring UX failure).** Diagnosed 2026-07-03. Every claudeAgent thread left
+idle past the session manager's 30-minute timeout burned the user's next message: the run
+failed in <1s with the generic "Claude Agent SDK query failed.", and the immediate retry
+succeeded. 11 occurrences across 6 threads (7 idle-reaper, 4 restart-triggered — including the
+post-EPIPE-crash instant failures on 7f1dfff1 run 10 and 71e29ba5 run 89, retroactively
+explained).
+
+**Root cause:** `ClaudeAdapterV2.openQuery` decided create-vs-resume solely from the in-memory
+`openedNativeThreads` set (allocated per `openSession` runtime at line ~1951). Idle release /
+crash / restart destroys the runtime; the next open saw an empty set → create-style
+`sessionId:` open for a native session that already exists → SDK error. The failed attempt
+pre-inserted the thread into the set, which is why the retry resumed and succeeded — the
+failure itself "fixed" the state.
+
+**Fix (commit 8188f974be):** `shouldResume` now also consults the persisted provider thread —
+`firstRunOrdinal < runOrdinal` proves an earlier run already opened the native session (note:
+`firstRunOrdinal` is stamped at turn start by `ProviderTurnStartService`, so a plain non-null
+check would break first-ever opens). Threads are marked opened only after `queryRunner.open`
+succeeds, so a failed create no longer poisons the in-memory state either. Replay fixture
+`claude_idle_resume` drives the real idle reaper via a new `advance_clock` fixture step
+(31 simulated minutes) and asserts the reopen uses `resume:` with both runs completing.
+
+- [x] Status: FIXED (commit 8188f974be) + replay fixture. App-verified 2026-07-03 against a
+      real claudeAgent (Haiku) session in an isolated dev instance: turn 1 opened with
+      `sessionId:` (create), backend process restarted mid-thread, turn 2 opened with
+      `resume:<same id>` and completed on the FIRST attempt; turn 3 reused the live query
+      (no extra query.open). Zero failed runs, zero error items.
+
+## 16. Steering latency invisible: queued→steer offers sit unconsumed with no feedback
+
+**Severity: medium (UX, caused a perceived total failure).** Diagnosed 2026-07-03 from thread
+7c366fdb (05:37–06:06 UTC): user queued a message during a 27-minute claudeAgent turn, promoted
+it to steer at 06:04:50; the SDK only consumes offered messages at an internal step boundary,
+which took ~76 seconds. Nothing in the events or UI distinguishes "steer accepted by app" from
+"provider actually acting on it", so the user saw silence, nudged twice more (each nudge fired
+another `query.offer` into the same unconsumed stream), concluded the session was dead, and
+manually restarted the app — which cleanly stopped every provider session (mass
+`provider-session → stopped` at 06:06:18.6, recovery `terminalizedRuns: 0` at 06:06:27 proves
+no crash). The first post-restart run then insta-failed (issue 15), completing the "session
+died" impression. NOT part of the EPIPE crash family.
+
+**Proposed fix:**
+
+1. Emit a steering-pending signal when the `provider-turn.steer` effect is dispatched
+   (`Orchestrator.ts` `dispatchSteerIntoRun`), and resolve it when the adapter observes the
+   SDK's `aborted_streaming` result (`ClaudeAdapterV2.ts` steering-abort branch) — UI shows
+   "steering — the agent will pick this up at its next step" instead of silence.
+2. Coalesce repeated steers targeting the same run while one is unacknowledged (queue as
+   follow-up context rather than stacking `query.offer`s).
+3. Verify a steered-but-unconsumed message survives an app restart (or is re-queued) rather
+   than being dropped.
 
 - [ ] Status: not started
 
