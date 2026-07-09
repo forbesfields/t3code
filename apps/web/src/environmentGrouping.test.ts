@@ -7,6 +7,7 @@ import {
   derivePhysicalProjectKey,
   resolveProjectGroupingMode,
 } from "./logicalProject";
+import { buildSidebarProjectSnapshots } from "./sidebarProjectGrouping";
 import type { Project } from "./types";
 
 const primaryEnvironmentId = EnvironmentId.make("env-primary");
@@ -118,5 +119,37 @@ describe("environment grouping", () => {
         },
       }),
     ).toBe("separate");
+  });
+
+  it("dedupes stale project rows with the same environment and workspace path", () => {
+    const duplicate = makeProject({
+      id: ProjectId.make("project-duplicate"),
+      workspaceRoot: "/tmp/shared-repo/",
+      repositoryIdentity,
+    });
+    const primary = makeProject({
+      repositoryIdentity,
+    });
+    const remote = makeProject({
+      id: ProjectId.make("project-remote"),
+      environmentId: remoteEnvironmentId,
+      workspaceRoot: "/tmp/shared-repo",
+      repositoryIdentity,
+    });
+
+    const snapshots = buildSidebarProjectSnapshots({
+      projects: [primary, duplicate, remote],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) =>
+        environmentId === remoteEnvironmentId ? "remote" : "primary",
+    });
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]?.groupedProjectCount).toBe(2);
+    expect(snapshots[0]?.memberProjects.map((project) => project.id)).toEqual([
+      primary.id,
+      remote.id,
+    ]);
   });
 });

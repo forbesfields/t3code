@@ -71,6 +71,29 @@ export function requireProjectAbsent(input: {
   );
 }
 
+export function requireActiveProjectWorkspaceRootAbsent(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly workspaceRoot: string;
+  readonly exceptProjectId?: ProjectId;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  const existingProject = input.readModel.projects.find(
+    (project) =>
+      project.deletedAt === null &&
+      project.workspaceRoot === input.workspaceRoot &&
+      project.id !== input.exceptProjectId,
+  );
+  if (existingProject === undefined) {
+    return Effect.void;
+  }
+  return Effect.fail(
+    invariantError(
+      input.command.type,
+      `Active project '${existingProject.id}' already exists for workspace root '${input.workspaceRoot}'.`,
+    ),
+  );
+}
+
 export function requireThread(input: {
   readonly readModel: OrchestrationReadModel;
   readonly command: OrchestrationCommand;

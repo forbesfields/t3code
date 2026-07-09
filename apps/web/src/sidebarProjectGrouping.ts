@@ -59,13 +59,19 @@ export function buildSidebarProjectSnapshots(input: {
   const groupedMembers = new Map<string, SidebarProjectGroupMember[]>();
   for (const project of input.projects) {
     const logicalKey = deriveLogicalProjectKeyFromSettings(project, input.settings);
+    const physicalProjectKey = derivePhysicalProjectKey(project);
     const member: SidebarProjectGroupMember = {
       ...project,
-      physicalProjectKey: derivePhysicalProjectKey(project),
+      physicalProjectKey,
       environmentLabel: input.resolveEnvironmentLabel(project.environmentId),
     };
     const existing = groupedMembers.get(logicalKey);
     if (existing) {
+      if (
+        existing.some((existingMember) => existingMember.physicalProjectKey === physicalProjectKey)
+      ) {
+        continue;
+      }
       existing.push(member);
     } else {
       groupedMembers.set(logicalKey, [member]);
