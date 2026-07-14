@@ -153,6 +153,38 @@ function ProviderAuthEmail(props: {
   );
 }
 
+function formatRateLimitReset(resetsAt: number | null | undefined): string | null {
+  if (!resetsAt) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(resetsAt * 1_000));
+}
+
+function ProviderAccountUsage({ usage }: { readonly usage: ServerProvider["accountUsage"] }) {
+  if (!usage) return null;
+  const windows = [
+    ["Primary", usage.primary],
+    ["Secondary", usage.secondary],
+  ] as const;
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      {windows.map(([label, window]) => {
+        if (!window) return null;
+        const reset = formatRateLimitReset(window.resetsAt);
+        return (
+          <span key={label} className={window.usedPercent >= 80 ? "text-warning" : undefined}>
+            {label}: {window.usedPercent}% used{reset ? ` · resets ${reset}` : ""}
+          </span>
+        );
+      })}
+      {usage.rateLimitReachedType ? <span className="text-destructive">Limit reached</span> : null}
+    </div>
+  );
+}
+
 function ProviderEnvironmentSection(props: {
   readonly environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>;
   readonly onChange: (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => void;
@@ -705,6 +737,7 @@ export function ProviderInstanceCard({
               {titleTailNode}
             </div>
             {authRowNode}
+            <ProviderAccountUsage usage={liveProvider?.accountUsage} />
           </div>
           <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
             <Button

@@ -742,6 +742,17 @@ export function sortProjectsForSidebar<
   threads: readonly TThread[],
   sortOrder: SidebarProjectSortOrder,
 ): TProject[] {
+  if (sortOrder === "manual") {
+    return [...projects];
+  }
+
+  if (sortOrder === "alphabetical") {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return [...projects].toSorted(
+      (left, right) => collator.compare(left.title, right.title) || left.id.localeCompare(right.id),
+    );
+  }
+
   const threadsByProjectId = new Map<string, TThread[]>();
   for (const thread of threads) {
     const existing = threadsByProjectId.get(thread.projectId) ?? [];

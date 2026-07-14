@@ -206,6 +206,7 @@ import {
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
+  alphabetical: "Alphabetical",
   updated_at: "Last user message",
   created_at: "Created at",
   manual: "Manual",
