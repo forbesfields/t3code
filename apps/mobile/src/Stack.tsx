@@ -44,6 +44,7 @@ import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppea
 import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
 import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteScreen";
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
+import { SettingsPrivacyPolicyRouteScreen } from "./features/settings/SettingsPrivacyPolicyRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsWaitlistRouteScreen } from "./features/settings/SettingsWaitlistRouteScreen";
 import { useAppShortcuts } from "./features/shortcuts/useAppShortcuts";
@@ -154,6 +155,14 @@ const SettingsSheetStack = createNativeStackNavigator({
       linking: "client-storage",
       options: {
         title: "Client Storage",
+      },
+    }),
+    SettingsPrivacyPolicy: createNativeStackScreen({
+      screen: SettingsPrivacyPolicyRouteScreen,
+      linking: "privacy-policy",
+      options: {
+        ...SHEET_SOLID_HEADER_OPTIONS,
+        title: "Privacy Policy",
       },
     }),
     SettingsAuth: createNativeStackScreen({
