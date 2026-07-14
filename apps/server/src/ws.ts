@@ -98,6 +98,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
+import * as HermesBridgeClient from "./hermes/HermesBridgeClient.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
@@ -296,6 +297,11 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetProcessDiagnostics, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetProcessResourceHistory, AuthOrchestrationReadScope],
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesListSessions, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesGetSession, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesListCronJobs, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesCronAction, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesSaveCron, AuthOrchestrationOperateScope],
   [WS_METHODS.cloudGetRelayClientStatus, AuthRelayWriteScope],
   [WS_METHODS.cloudInstallRelayClient, AuthRelayWriteScope],
   [WS_METHODS.sourceControlLookupRepository, AuthOrchestrationReadScope],
@@ -1297,6 +1303,28 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.hermesListSessions]: (_input) =>
+          observeRpcEffect(WS_METHODS.hermesListSessions, HermesBridgeClient.listSessions, {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesGetSession]: ({ sessionId }) =>
+          observeRpcEffect(WS_METHODS.hermesGetSession, HermesBridgeClient.getSession(sessionId), {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesListCronJobs]: (_input) =>
+          observeRpcEffect(WS_METHODS.hermesListCronJobs, HermesBridgeClient.listCronJobs, {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesCronAction]: ({ action, jobId }) =>
+          observeRpcEffect(
+            WS_METHODS.hermesCronAction,
+            HermesBridgeClient.runCronAction(action, jobId),
+            { "rpc.aggregate": "hermes" },
+          ),
+        [WS_METHODS.hermesSaveCron]: (input) =>
+          observeRpcEffect(WS_METHODS.hermesSaveCron, HermesBridgeClient.saveCron(input), {
+            "rpc.aggregate": "hermes",
+          }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(
             WS_METHODS.serverDiscoverSourceControl,

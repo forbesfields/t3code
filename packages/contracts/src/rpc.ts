@@ -143,6 +143,15 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  HermesBridgeError,
+  HermesCronAction,
+  HermesCronSaveInput,
+  HermesCronJobsResult,
+  HermesMutationResult,
+  HermesSessionResult,
+  HermesSessionsResult,
+} from "./hermes.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -214,6 +223,13 @@ export const WS_METHODS = {
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
 
+  // Hermes control center
+  hermesListSessions: "hermes.listSessions",
+  hermesGetSession: "hermes.getSession",
+  hermesListCronJobs: "hermes.listCronJobs",
+  hermesCronAction: "hermes.cronAction",
+  hermesSaveCron: "hermes.saveCron",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -282,6 +298,36 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsPatch }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesListSessionsRpc = Rpc.make(WS_METHODS.hermesListSessions, {
+  payload: Schema.Struct({}),
+  success: HermesSessionsResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesGetSessionRpc = Rpc.make(WS_METHODS.hermesGetSession, {
+  payload: Schema.Struct({ sessionId: Schema.String }),
+  success: HermesSessionResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesListCronJobsRpc = Rpc.make(WS_METHODS.hermesListCronJobs, {
+  payload: Schema.Struct({}),
+  success: HermesCronJobsResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesCronActionRpc = Rpc.make(WS_METHODS.hermesCronAction, {
+  payload: Schema.Struct({ action: HermesCronAction, jobId: Schema.String }),
+  success: HermesMutationResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesSaveCronRpc = Rpc.make(WS_METHODS.hermesSaveCron, {
+  payload: HermesCronSaveInput,
+  success: HermesMutationResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
 });
 
 export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
@@ -689,6 +735,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
+  WsHermesListSessionsRpc,
+  WsHermesGetSessionRpc,
+  WsHermesListCronJobsRpc,
+  WsHermesCronActionRpc,
+  WsHermesSaveCronRpc,
   WsServerDiscoverSourceControlRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,

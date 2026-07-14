@@ -298,6 +298,18 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-resource-history",
       tag: WS_METHODS.serverGetProcessResourceHistory,
     }),
+    hermesSessions: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:hermes:sessions",
+      tag: WS_METHODS.hermesListSessions,
+    }),
+    hermesSession: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:hermes:session",
+      tag: WS_METHODS.hermesGetSession,
+    }),
+    hermesCronJobs: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:hermes:cron-jobs",
+      tag: WS_METHODS.hermesListCronJobs,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
@@ -342,6 +354,14 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    hermesCronAction: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:cron-action",
+      tag: WS_METHODS.hermesCronAction,
+    }),
+    hermesSaveCron: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:save-cron",
+      tag: WS_METHODS.hermesSaveCron,
     }),
   };
 }
