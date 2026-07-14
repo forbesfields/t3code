@@ -280,18 +280,25 @@ export const make = Effect.gen(function* () {
         ),
       ),
       Effect.flatMap((rows) =>
+        // Skip rows that no longer decode (e.g. written by an older build)
+        // instead of failing the whole list — one stale row must not disable
+        // every consumer that enumerates sessions, such as the reaper.
         Effect.forEach(rows, (row) =>
           decodeRuntimeRow(row).pipe(
-            Effect.mapError((cause) =>
-              PersistenceDecodeError.fromSchemaError(
-                "ProviderSessionRuntimeRepository.list:decodeRows",
-                cause,
-                { threadId: row.threadId },
-              ),
+            Effect.map(Option.some),
+            Effect.catch((cause) =>
+              Effect.logWarning("provider.session.runtime.row-skipped", {
+                error: PersistenceDecodeError.fromSchemaError(
+                  "ProviderSessionRuntimeRepository.list:decodeRows",
+                  cause,
+                  { threadId: row.threadId },
+                ),
+              }).pipe(Effect.as(Option.none<ProviderSessionRuntime>())),
             ),
           ),
         ),
       ),
+      Effect.map((decoded) => decoded.filter(Option.isSome).map((row) => row.value)),
     );
 
   const deleteByThreadId: ProviderSessionRuntimeRepository["Service"]["deleteByThreadId"] = (
