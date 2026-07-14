@@ -222,6 +222,7 @@ import {
 } from "../sidebarProjectGrouping";
 import { SidebarProviderUpdatePill } from "./sidebar/SidebarProviderUpdatePill";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
+  alphabetical: "Alphabetical",
   updated_at: "Last user message",
   created_at: "Created at",
   manual: "Manual",

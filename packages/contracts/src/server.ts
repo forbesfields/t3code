@@ -153,6 +153,25 @@ export const ServerProviderUpdateState = Schema.Struct({
 });
 export type ServerProviderUpdateState = typeof ServerProviderUpdateState.Type;
 
+export const ServerProviderRateLimitWindow = Schema.Struct({
+  usedPercent: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 })),
+  resetsAt: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+  windowDurationMins: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+});
+export type ServerProviderRateLimitWindow = typeof ServerProviderRateLimitWindow.Type;
+
+/**
+ * A provider-owned account quota snapshot. T3 Code never stores credentials
+ * here; the driver reads this from the provider's own authenticated runtime.
+ */
+export const ServerProviderAccountUsage = Schema.Struct({
+  planType: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+  primary: Schema.optionalKey(ServerProviderRateLimitWindow),
+  secondary: Schema.optionalKey(ServerProviderRateLimitWindow),
+  rateLimitReachedType: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+});
+export type ServerProviderAccountUsage = typeof ServerProviderAccountUsage.Type;
+
 export const ServerProvider = Schema.Struct({
   // Routing key for the configured instance this snapshot represents. This
   // is the only stable identity consumers may use for provider routing.
@@ -171,6 +190,7 @@ export const ServerProvider = Schema.Struct({
   version: Schema.NullOr(TrimmedNonEmptyString),
   status: ServerProviderState,
   auth: ServerProviderAuth,
+  accountUsage: Schema.optionalKey(ServerProviderAccountUsage),
   checkedAt: IsoDateTime,
   message: Schema.optional(TrimmedNonEmptyString),
   // Optional for back-compat: every legacy producer omits this field and

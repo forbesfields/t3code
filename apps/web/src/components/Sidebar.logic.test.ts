@@ -908,6 +908,24 @@ describe("getFallbackThreadIdAfterDelete", () => {
   });
 });
 describe("sortProjectsForSidebar", () => {
+  it("sorts project titles alphabetically with natural numeric ordering", () => {
+    const sorted = sortProjectsForSidebar(
+      [
+        makeProject({ id: ProjectId.make("project-10"), title: "Project 10" }),
+        makeProject({ id: ProjectId.make("project-2"), title: "project 2" }),
+        makeProject({ id: ProjectId.make("project-alpha"), title: "Alpha" }),
+      ],
+      [],
+      "alphabetical",
+    );
+
+    expect(sorted.map((project) => project.id)).toEqual([
+      ProjectId.make("project-alpha"),
+      ProjectId.make("project-2"),
+      ProjectId.make("project-10"),
+    ]);
+  });
+
   it("sorts projects by the most recent user message across their threads", () => {
     const projects = [
       makeProject({ id: ProjectId.make("project-1"), title: "Older project" }),

@@ -30,7 +30,11 @@ import { deepMerge } from "@t3tools/shared/Struct";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
-import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
+import {
+  checkCodexProviderStatus,
+  mapCodexAccountUsage,
+  type CodexAppServerProviderSnapshot,
+} from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
@@ -302,6 +306,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
   "ProviderRegistry",
   (it) => {
     describe("checkCodexProviderStatus", () => {
+      it("maps an account snapshot without treating absent sparse fields as resets", () => {
+        const usage = mapCodexAccountUsage({
+          planType: "pro",
+          primary: { usedPercent: 82, resetsAt: 1_775_888_000 },
+          secondary: { usedPercent: 14 },
+        });
+
+        assert.deepStrictEqual(usage, {
+          planType: "pro",
+          primary: { usedPercent: 82, resetsAt: 1_775_888_000 },
+          secondary: { usedPercent: 14 },
+        });
+      });
+
       it.effect("uses the app-server account and model list for provider status", () =>
         Effect.gen(function* () {
           const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>

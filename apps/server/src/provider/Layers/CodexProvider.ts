@@ -21,6 +21,7 @@ import type {
   ProviderOptionDescriptor,
   ServerProviderModel,
   ServerProviderSkill,
+  ServerProviderAccountUsage,
 } from "@t3tools/contracts";
 import { ServerSettingsError } from "@t3tools/contracts";
 
@@ -47,6 +48,33 @@ export interface CodexAppServerProviderSnapshot {
   readonly version: string | undefined;
   readonly models: ReadonlyArray<ServerProviderModel>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
+  readonly accountUsage?: ServerProviderAccountUsage;
+}
+
+export function mapCodexAccountUsage(
+  snapshot: CodexSchema.V2GetAccountRateLimitsResponse["rateLimits"],
+): ServerProviderAccountUsage | undefined {
+  const toWindow = (window: typeof snapshot.primary) =>
+    window
+      ? {
+          usedPercent: Math.max(0, Math.min(100, window.usedPercent)),
+          ...(window.resetsAt !== undefined ? { resetsAt: window.resetsAt } : {}),
+          ...(window.windowDurationMins !== undefined
+            ? { windowDurationMins: window.windowDurationMins }
+            : {}),
+        }
+      : undefined;
+  const primary = toWindow(snapshot.primary);
+  const secondary = toWindow(snapshot.secondary);
+  const planType = snapshot.planType ?? undefined;
+  const rateLimitReachedType = snapshot.rateLimitReachedType ?? undefined;
+  if (!primary && !secondary && !planType && !rateLimitReachedType) return undefined;
+  return {
+    ...(planType ? { planType } : {}),
+    ...(primary ? { primary } : {}),
+    ...(secondary ? { secondary } : {}),
+    ...(rateLimitReachedType ? { rateLimitReachedType } : {}),
+  };
 }
 
 const REASONING_EFFORT_LABELS: Readonly<Record<string, string>> = {
@@ -357,21 +385,27 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  const [skillsResponse, models] = yield* Effect.all(
+  const [skillsResponse, models, rateLimitResponse] = yield* Effect.all(
     [
       client.request("skills/list", {
         cwds: [input.cwd],
       }),
       requestAllCodexModels(client),
+      client.request("account/rateLimits/read", undefined).pipe(Effect.option),
     ],
     { concurrency: "unbounded" },
   );
+
+  const accountUsage = Option.isSome(rateLimitResponse)
+    ? mapCodexAccountUsage(rateLimitResponse.value.rateLimits)
+    : undefined;
 
   return {
     account: accountResponse,
     version,
     models: appendCustomCodexModels(models, input.customModels ?? []),
     skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
+    ...(accountUsage ? { accountUsage } : {}),
   } satisfies CodexAppServerProviderSnapshot;
 });
 
@@ -559,6 +593,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     checkedAt,
     models: snapshot.models,
     skills: snapshot.skills,
+    ...(snapshot.accountUsage ? { accountUsage: snapshot.accountUsage } : {}),
     probe: {
       installed: true,
       version: snapshot.version ?? null,
