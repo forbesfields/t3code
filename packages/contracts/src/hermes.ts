@@ -16,6 +16,27 @@ export const HermesSessionsResult = Schema.Struct({
 });
 export type HermesSessionsResult = typeof HermesSessionsResult.Type;
 
+export const HermesModel = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+});
+export type HermesModel = typeof HermesModel.Type;
+
+export const HermesModelGroup = Schema.Struct({
+  provider: Schema.String,
+  provider_id: Schema.optionalKey(Schema.String),
+  models: Schema.Array(HermesModel),
+  extra_models: Schema.optionalKey(Schema.Array(HermesModel)),
+});
+export type HermesModelGroup = typeof HermesModelGroup.Type;
+
+export const HermesModelsResult = Schema.Struct({
+  active_provider: Schema.NullOr(Schema.String),
+  default_model: Schema.String,
+  groups: Schema.Array(HermesModelGroup),
+});
+export type HermesModelsResult = typeof HermesModelsResult.Type;
+
 export const HermesMessage = Schema.Struct({
   role: Schema.String,
   content: Schema.Unknown,
@@ -29,7 +50,9 @@ export const HermesSessionResult = Schema.Struct({
     title: Schema.String,
     workspace: Schema.String,
     model: Schema.String,
+    model_provider: Schema.optionalKey(Schema.NullOr(Schema.String)),
     is_streaming: Schema.Boolean,
+    active_stream_id: Schema.optionalKey(Schema.NullOr(Schema.String)),
     messages: Schema.Array(HermesMessage),
   }),
 });
@@ -66,6 +89,76 @@ export type HermesCronSaveInput = typeof HermesCronSaveInput.Type;
 
 export const HermesMutationResult = Schema.Record(Schema.String, Schema.Unknown);
 export type HermesMutationResult = typeof HermesMutationResult.Type;
+
+export const HermesApproval = Schema.Struct({
+  approval_id: Schema.optionalKey(Schema.String),
+  command: Schema.optionalKey(Schema.String),
+  description: Schema.optionalKey(Schema.String),
+  choices: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+export type HermesApproval = typeof HermesApproval.Type;
+
+export const HermesApprovalPendingResult = Schema.Struct({
+  pending: Schema.NullOr(HermesApproval),
+  pending_count: Schema.Int,
+});
+export type HermesApprovalPendingResult = typeof HermesApprovalPendingResult.Type;
+
+export const HermesCreateSessionInput = Schema.Struct({
+  model: Schema.optionalKey(Schema.String),
+  modelProvider: Schema.optionalKey(Schema.String),
+  workspace: Schema.optionalKey(Schema.String),
+});
+export type HermesCreateSessionInput = typeof HermesCreateSessionInput.Type;
+
+export const HermesChatSendInput = Schema.Struct({
+  sessionId: Schema.String,
+  message: Schema.String,
+  model: Schema.String,
+  modelProvider: Schema.optionalKey(Schema.String),
+  workspace: Schema.String,
+});
+export type HermesChatSendInput = typeof HermesChatSendInput.Type;
+
+export const HermesChatStartResult = Schema.Struct({
+  stream_id: Schema.String,
+});
+export type HermesChatStartResult = typeof HermesChatStartResult.Type;
+
+export const HermesChatSteerInput = Schema.Struct({
+  sessionId: Schema.String,
+  text: Schema.String,
+});
+export type HermesChatSteerInput = typeof HermesChatSteerInput.Type;
+
+export const HermesChatSteerResult = Schema.Struct({
+  accepted: Schema.Boolean,
+  fallback: Schema.NullOr(Schema.String),
+  stream_id: Schema.NullOr(Schema.String),
+});
+export type HermesChatSteerResult = typeof HermesChatSteerResult.Type;
+
+export const HermesChatCancelInput = Schema.Struct({
+  streamId: Schema.String,
+});
+export type HermesChatCancelInput = typeof HermesChatCancelInput.Type;
+
+export const HermesChatCancelResult = Schema.Struct({
+  ok: Schema.Boolean,
+  cancelled: Schema.Boolean,
+  stream_id: Schema.String,
+});
+export type HermesChatCancelResult = typeof HermesChatCancelResult.Type;
+
+export const HermesApprovalChoice = Schema.Literals(["once", "session", "always", "deny"]);
+export type HermesApprovalChoice = typeof HermesApprovalChoice.Type;
+
+export const HermesApprovalRespondInput = Schema.Struct({
+  sessionId: Schema.String,
+  approvalId: Schema.optionalKey(Schema.String),
+  choice: HermesApprovalChoice,
+});
+export type HermesApprovalRespondInput = typeof HermesApprovalRespondInput.Type;
 
 export class HermesBridgeError extends Schema.TaggedErrorClass<HermesBridgeError>()(
   "HermesBridgeError",

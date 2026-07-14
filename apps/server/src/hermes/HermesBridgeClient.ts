@@ -3,11 +3,21 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeUtil from "node:util";
 
 import {
+  HermesApprovalPendingResult,
   HermesBridgeError,
+  HermesChatCancelResult,
+  HermesChatStartResult,
+  HermesChatSteerResult,
   HermesCronJobsResult,
   HermesMutationResult,
+  HermesModelsResult,
   HermesSessionResult,
   HermesSessionsResult,
+  type HermesApprovalRespondInput,
+  type HermesChatCancelInput,
+  type HermesChatSendInput,
+  type HermesChatSteerInput,
+  type HermesCreateSessionInput,
   type HermesCronAction,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -80,6 +90,61 @@ export const getSession = (sessionId: string) =>
     `/api/session?${new URLSearchParams({ session_id: sessionId })}`,
     HermesSessionResult,
   );
+
+export const listModels = request("list models", "/api/models", HermesModelsResult);
+
+export const createSession = (input: HermesCreateSessionInput) =>
+  request("create session", "/api/session/new", HermesSessionResult, {
+    method: "POST",
+    body: JSON.stringify({
+      model: input.model,
+      model_provider: input.modelProvider,
+      workspace: input.workspace,
+    }),
+  });
+
+export const sendMessage = (input: HermesChatSendInput) =>
+  request("send message", "/api/chat/start", HermesChatStartResult, {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: input.sessionId,
+      message: input.message,
+      model: input.model,
+      model_provider: input.modelProvider,
+      workspace: input.workspace,
+      explicit_model_pick: true,
+    }),
+  });
+
+export const steerChat = (input: HermesChatSteerInput) =>
+  request("steer chat", "/api/chat/steer", HermesChatSteerResult, {
+    method: "POST",
+    body: JSON.stringify({ session_id: input.sessionId, text: input.text }),
+  });
+
+export const cancelChat = (input: HermesChatCancelInput) =>
+  request(
+    "cancel chat",
+    `/api/chat/cancel?${new URLSearchParams({ stream_id: input.streamId })}`,
+    HermesChatCancelResult,
+  );
+
+export const getApproval = (sessionId: string) =>
+  request(
+    "get approval",
+    `/api/approval/pending?${new URLSearchParams({ session_id: sessionId })}`,
+    HermesApprovalPendingResult,
+  );
+
+export const respondApproval = (input: HermesApprovalRespondInput) =>
+  request("respond to approval", "/api/approval/respond", HermesMutationResult, {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: input.sessionId,
+      approval_id: input.approvalId,
+      choice: input.choice,
+    }),
+  });
 
 export const listCronJobs = request("list cron jobs", "/api/crons", HermesCronJobsResult);
 

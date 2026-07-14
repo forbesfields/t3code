@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  type AtomCommandResult,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import {
   BotIcon,
   CalendarClockIcon,
+  CornerDownRightIcon,
   LoaderCircleIcon,
   MessageSquareIcon,
   PauseIcon,
@@ -9,15 +14,26 @@ import {
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
+  SendIcon,
+  SquareIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { HermesCronAction } from "@t3tools/contracts";
+import type { HermesApprovalChoice, HermesCronAction } from "@t3tools/contracts";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
+import {
+  Select,
+  SelectGroup,
+  SelectGroupLabel,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { SidebarInset } from "../components/ui/sidebar";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
@@ -33,6 +49,13 @@ interface CronDraft {
   readonly schedule: string;
 }
 
+interface HermesModelOption {
+  readonly value: string;
+  readonly id: string;
+  readonly label: string;
+  readonly providerId: string;
+}
+
 function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   try {
@@ -42,6 +65,12 @@ function messageText(content: unknown): string {
   }
 }
 
+function unwrapCommandResult<A, E>(result: AtomCommandResult<A, E>): A {
+  if (result._tag === "Success") return result.value;
+  const error = squashAtomCommandFailure(result);
+  throw error instanceof Error ? error : new Error("Hermes request failed.");
+}
+
 function HermesRouteView() {
   const environmentId = usePrimaryEnvironmentId();
   const [tab, setTab] = useState<HermesTab>("chats");
@@ -49,11 +78,21 @@ function HermesRouteView() {
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [cronDraft, setCronDraft] = useState<CronDraft | null>(null);
   const [cronSaveError, setCronSaveError] = useState<string | null>(null);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatPending, setChatPending] = useState(false);
+  const [approvalPending, setApprovalPending] = useState<HermesApprovalChoice | null>(null);
+  const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
+  const [selectedModelValue, setSelectedModelValue] = useState("");
+  const [modelSessionId, setModelSessionId] = useState<string | null>(null);
   const sessions = useEnvironmentQuery(
     environmentId === null ? null : serverEnvironment.hermesSessions({ environmentId, input: {} }),
   );
   const cronJobs = useEnvironmentQuery(
     environmentId === null ? null : serverEnvironment.hermesCronJobs({ environmentId, input: {} }),
+  );
+  const models = useEnvironmentQuery(
+    environmentId === null ? null : serverEnvironment.hermesModels({ environmentId, input: {} }),
   );
   const session = useEnvironmentQuery(
     environmentId === null || selectedSessionId === null
@@ -63,10 +102,33 @@ function HermesRouteView() {
           input: { sessionId: selectedSessionId },
         }),
   );
+  const approval = useEnvironmentQuery(
+    environmentId === null || selectedSessionId === null
+      ? null
+      : serverEnvironment.hermesApproval({
+          environmentId,
+          input: { sessionId: selectedSessionId },
+        }),
+  );
   const cronAction = useAtomCommand(serverEnvironment.hermesCronAction, {
     reportFailure: false,
   });
   const saveCron = useAtomCommand(serverEnvironment.hermesSaveCron, {
+    reportFailure: false,
+  });
+  const createSession = useAtomCommand(serverEnvironment.hermesCreateSession, {
+    reportFailure: false,
+  });
+  const sendMessage = useAtomCommand(serverEnvironment.hermesSendMessage, {
+    reportFailure: false,
+  });
+  const steerChat = useAtomCommand(serverEnvironment.hermesSteerChat, {
+    reportFailure: false,
+  });
+  const cancelChat = useAtomCommand(serverEnvironment.hermesCancelChat, {
+    reportFailure: false,
+  });
+  const respondApproval = useAtomCommand(serverEnvironment.hermesRespondApproval, {
     reportFailure: false,
   });
 
@@ -80,6 +142,192 @@ function HermesRouteView() {
     () => sessions.data?.sessions.find((item) => item.session_id === selectedSessionId) ?? null,
     [selectedSessionId, sessions.data],
   );
+
+  const modelOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: HermesModelOption[] = [];
+    for (const group of models.data?.groups ?? []) {
+      const providerId = group.provider_id ?? group.provider;
+      for (const model of [...group.models, ...(group.extra_models ?? [])]) {
+        const value = JSON.stringify([providerId, model.id]);
+        if (seen.has(value)) continue;
+        seen.add(value);
+        options.push({
+          value,
+          id: model.id,
+          label: model.label,
+          providerId,
+        });
+      }
+    }
+    return options;
+  }, [models.data]);
+
+  const selectedModel = useMemo(
+    () => modelOptions.find((model) => model.value === selectedModelValue) ?? null,
+    [modelOptions, selectedModelValue],
+  );
+
+  useEffect(() => {
+    const current = session.data?.session;
+    if (
+      !current ||
+      current.session_id !== selectedSessionId ||
+      modelSessionId === current.session_id
+    )
+      return;
+    const exact = modelOptions.find(
+      (model) =>
+        model.id === current.model &&
+        (!current.model_provider || model.providerId === current.model_provider),
+    );
+    const fallback = exact ?? modelOptions.find((model) => model.id === current.model);
+    setSelectedModelValue(
+      fallback?.value ?? JSON.stringify([current.model_provider ?? "", current.model]),
+    );
+    setModelSessionId(current.session_id);
+  }, [modelOptions, modelSessionId, selectedSessionId, session.data]);
+
+  useEffect(() => {
+    const modelData = models.data;
+    if (selectedModelValue || !modelData) return;
+    const fallback =
+      modelOptions.find(
+        (model) =>
+          model.id === modelData.default_model && model.providerId === modelData.active_provider,
+      ) ?? modelOptions.find((model) => model.id === modelData.default_model);
+    if (fallback) setSelectedModelValue(fallback.value);
+  }, [modelOptions, models.data, selectedModelValue]);
+
+  useEffect(() => {
+    if (tab !== "chats" || selectedSessionId === null) return;
+    // ponytail: poll the existing HTTP bridge; replace with streamed RPC only if token latency matters.
+    const timer = window.setInterval(() => {
+      session.refresh();
+      sessions.refresh();
+      approval.refresh();
+    }, 1_500);
+    return () => window.clearInterval(timer);
+  }, [approval, selectedSessionId, session, sessions, tab]);
+
+  const refreshChat = () => {
+    session.refresh();
+    sessions.refresh();
+    approval.refresh();
+  };
+
+  const createNewChat = async () => {
+    if (environmentId === null) return;
+    setChatPending(true);
+    setChatError(null);
+    try {
+      const result = unwrapCommandResult(
+        await createSession({
+          environmentId,
+          input: {
+            ...(selectedModel
+              ? { model: selectedModel.id, modelProvider: selectedModel.providerId }
+              : {}),
+            ...(session.data?.session.workspace
+              ? { workspace: session.data.session.workspace }
+              : {}),
+          },
+        }),
+      );
+      setSelectedSessionId(result.session.session_id);
+      setModelSessionId(result.session.session_id);
+      setSelectedModelValue(
+        JSON.stringify([result.session.model_provider ?? "", result.session.model]),
+      );
+      sessions.refresh();
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Could not create Hermes chat.");
+    } finally {
+      setChatPending(false);
+    }
+  };
+
+  const submitChat = async () => {
+    const current = session.data?.session;
+    const text = chatDraft.trim();
+    if (environmentId === null || !current || !text) return;
+    setChatPending(true);
+    setChatError(null);
+    try {
+      if (current.is_streaming) {
+        const result = unwrapCommandResult(
+          await steerChat({
+            environmentId,
+            input: { sessionId: current.session_id, text },
+          }),
+        );
+        if (!result.accepted)
+          throw new Error(`Hermes could not steer this turn (${result.fallback}).`);
+      } else {
+        const modelProvider = selectedModel?.providerId ?? current.model_provider ?? undefined;
+        const result = unwrapCommandResult(
+          await sendMessage({
+            environmentId,
+            input: {
+              sessionId: current.session_id,
+              message: text,
+              model: selectedModel?.id ?? current.model,
+              ...(modelProvider ? { modelProvider } : {}),
+              workspace: current.workspace,
+            },
+          }),
+        );
+        setActiveStreamId(result.stream_id);
+      }
+      setChatDraft("");
+      refreshChat();
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Could not send message to Hermes.");
+    } finally {
+      setChatPending(false);
+    }
+  };
+
+  const stopChat = async () => {
+    if (environmentId === null) return;
+    const streamId = session.data?.session.active_stream_id ?? activeStreamId;
+    if (!streamId) return;
+    setChatPending(true);
+    setChatError(null);
+    try {
+      unwrapCommandResult(await cancelChat({ environmentId, input: { streamId } }));
+      setActiveStreamId(null);
+      refreshChat();
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Could not stop Hermes.");
+    } finally {
+      setChatPending(false);
+    }
+  };
+
+  const answerApproval = async (choice: HermesApprovalChoice) => {
+    if (environmentId === null || selectedSessionId === null) return;
+    setApprovalPending(choice);
+    setChatError(null);
+    try {
+      const approvalId = approval.data?.pending?.approval_id;
+      unwrapCommandResult(
+        await respondApproval({
+          environmentId,
+          input: {
+            sessionId: selectedSessionId,
+            ...(approvalId ? { approvalId } : {}),
+            choice,
+          },
+        }),
+      );
+      refreshChat();
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Could not answer Hermes approval.");
+    } finally {
+      setApprovalPending(null);
+    }
+  };
 
   const runCronAction = async (action: HermesCronAction, jobId: string) => {
     if (environmentId === null) return;
@@ -133,7 +381,9 @@ function HermesRouteView() {
             onClick={() => {
               sessions.refresh();
               cronJobs.refresh();
+              models.refresh();
               session.refresh();
+              approval.refresh();
             }}
           >
             <RefreshCwIcon /> Refresh
@@ -170,7 +420,17 @@ function HermesRouteView() {
             >
               <PlusIcon /> New cron
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              className="ml-auto"
+              size="sm"
+              variant="outline"
+              disabled={chatPending}
+              onClick={() => void createNewChat()}
+            >
+              <PlusIcon /> New chat
+            </Button>
+          )}
         </div>
 
         {connectionError ? (
@@ -215,35 +475,206 @@ function HermesRouteView() {
                 ))}
               </div>
             </ScrollArea>
-            <ScrollArea>
-              <div className="mx-auto max-w-3xl space-y-4 p-6">
-                {selectedSummary ? (
-                  <div className="mb-5 border-b border-border pb-4">
-                    <h2 className="font-semibold">{selectedSummary.title || "Untitled chat"}</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {selectedSummary.workspace} · {selectedSummary.model}
-                    </p>
+            <div className="flex min-h-0 flex-col">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="mx-auto max-w-3xl space-y-4 p-6">
+                  {selectedSummary ? (
+                    <div className="mb-5 border-b border-border pb-4">
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold">
+                          {selectedSummary.title || "Untitled chat"}
+                        </h2>
+                        {session.data?.session.is_streaming ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                            Working
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {selectedSummary.workspace} · {selectedSummary.model}
+                      </p>
+                    </div>
+                  ) : null}
+                  {session.isPending && !session.data ? (
+                    <LoadingLabel label="Loading conversation" />
+                  ) : null}
+                  {session.error ? (
+                    <p className="text-sm text-destructive">{session.error}</p>
+                  ) : null}
+                  {session.data?.session.messages.map((message) => (
+                    <article
+                      key={JSON.stringify([message.role, message.timestamp, message.content])}
+                      className="rounded-xl border border-border bg-card/30 p-4"
+                    >
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {message.role}
+                      </p>
+                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                        {messageText(message.content)}
+                      </pre>
+                    </article>
+                  ))}
+                  {session.data?.session.is_streaming ? (
+                    <LoadingLabel label="Hermes is working" />
+                  ) : null}
+                </div>
+              </ScrollArea>
+
+              {session.data ? (
+                <div className="shrink-0 border-t border-border bg-background p-4">
+                  <div className="mx-auto max-w-3xl space-y-3">
+                    {approval.data?.pending ? (
+                      <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                          Hermes needs approval
+                          {approval.data.pending_count > 1
+                            ? ` · ${approval.data.pending_count} pending`
+                            : ""}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                          {approval.data.pending.description ??
+                            approval.data.pending.command ??
+                            "Allow this action?"}
+                        </p>
+                        {approval.data.pending.command ? (
+                          <code className="mt-2 block rounded-md bg-background/70 p-2 text-xs">
+                            {approval.data.pending.command}
+                          </code>
+                        ) : null}
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            disabled={approvalPending !== null}
+                            onClick={() => void answerApproval("once")}
+                          >
+                            Allow once
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            disabled={approvalPending !== null}
+                            onClick={() => void answerApproval("session")}
+                          >
+                            Allow session
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            disabled={approvalPending !== null}
+                            onClick={() => void answerApproval("always")}
+                          >
+                            Always allow
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="destructive"
+                            disabled={approvalPending !== null}
+                            onClick={() => void answerApproval("deny")}
+                          >
+                            Deny
+                          </Button>
+                        </div>
+                      </section>
+                    ) : null}
+
+                    <form
+                      className="rounded-xl border border-input bg-card/30 p-2 shadow-xs"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void submitChat();
+                      }}
+                    >
+                      <Textarea
+                        className="min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+                        placeholder={
+                          session.data.session.is_streaming
+                            ? "Steer the active Hermes turn…"
+                            : "Message Hermes…"
+                        }
+                        value={chatDraft}
+                        onChange={(event) => setChatDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            void submitChat();
+                          }
+                        }}
+                      />
+                      <div className="flex items-center gap-2 border-t border-border/60 pt-2">
+                        {modelOptions.length > 0 ? (
+                          <Select
+                            modal={false}
+                            value={selectedModelValue || null}
+                            onValueChange={(value) => value && setSelectedModelValue(value)}
+                            items={modelOptions.map((model) => ({
+                              value: model.value,
+                              label: model.label,
+                            }))}
+                          >
+                            <SelectTrigger
+                              size="xs"
+                              variant="ghost"
+                              className="max-w-56"
+                              aria-label="Hermes model"
+                            >
+                              <SelectValue placeholder="Choose model" />
+                            </SelectTrigger>
+                            <SelectPopup alignItemWithTrigger={false} className="max-h-80">
+                              {models.data?.groups.map((group) => {
+                                const providerId = group.provider_id ?? group.provider;
+                                const options = modelOptions.filter(
+                                  (model) => model.providerId === providerId,
+                                );
+                                if (options.length === 0) return null;
+                                return (
+                                  <SelectGroup key={providerId}>
+                                    <SelectGroupLabel>{group.provider}</SelectGroupLabel>
+                                    {options.map((model) => (
+                                      <SelectItem key={model.value} value={model.value}>
+                                        {model.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                );
+                              })}
+                            </SelectPopup>
+                          </Select>
+                        ) : (
+                          <span className="px-2 text-xs text-muted-foreground">
+                            {models.error ?? "Loading models…"}
+                          </span>
+                        )}
+                        <span className="flex-1" />
+                        {session.data.session.is_streaming ? (
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={chatPending}
+                            onClick={() => void stopChat()}
+                          >
+                            <SquareIcon /> Stop
+                          </Button>
+                        ) : null}
+                        <Button type="submit" size="xs" disabled={chatPending || !chatDraft.trim()}>
+                          {chatPending ? (
+                            <LoaderCircleIcon className="animate-spin" />
+                          ) : session.data.session.is_streaming ? (
+                            <CornerDownRightIcon />
+                          ) : (
+                            <SendIcon />
+                          )}
+                          {session.data.session.is_streaming ? "Steer" : "Send"}
+                        </Button>
+                      </div>
+                    </form>
+                    {chatError ? <p className="text-xs text-destructive">{chatError}</p> : null}
                   </div>
-                ) : null}
-                {session.isPending && !session.data ? (
-                  <LoadingLabel label="Loading conversation" />
-                ) : null}
-                {session.error ? <p className="text-sm text-destructive">{session.error}</p> : null}
-                {session.data?.session.messages.map((message) => (
-                  <article
-                    key={JSON.stringify([message.role, message.timestamp, message.content])}
-                    className="rounded-xl border border-border bg-card/30 p-4"
-                  >
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {message.role}
-                    </p>
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {messageText(message.content)}
-                    </pre>
-                  </article>
-                ))}
-              </div>
-            </ScrollArea>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : (
           <ScrollArea className="flex-1">

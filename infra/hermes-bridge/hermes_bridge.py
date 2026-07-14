@@ -19,12 +19,14 @@ BRIDGE_TOKEN = os.environ["HERMES_BRIDGE_TOKEN"]
 MAX_BODY_BYTES = 1_000_000
 
 GET_PATHS = frozenset({
-    "/health", "/api/sessions", "/api/session", "/api/approval/pending",
+    "/health", "/api/sessions", "/api/session", "/api/models",
+    "/api/chat/cancel", "/api/approval/pending",
     "/api/crons", "/api/crons/output", "/api/crons/history", "/api/crons/recent",
     "/api/crons/status", "/api/crons/delivery-options",
 })
 POST_PATHS = frozenset({
-    "/api/chat/start", "/api/chat/steer", "/api/approval/respond", "/api/crons/create",
+    "/api/session/new", "/api/chat/start", "/api/chat/steer",
+    "/api/approval/respond", "/api/crons/create",
     "/api/crons/update", "/api/crons/delete", "/api/crons/run", "/api/crons/pause",
     "/api/crons/resume",
 })
