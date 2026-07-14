@@ -144,11 +144,21 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import {
+  HermesApprovalPendingResult,
+  HermesApprovalRespondInput,
   HermesBridgeError,
+  HermesChatCancelInput,
+  HermesChatCancelResult,
+  HermesChatSendInput,
+  HermesChatStartResult,
+  HermesChatSteerInput,
+  HermesChatSteerResult,
+  HermesCreateSessionInput,
   HermesCronAction,
   HermesCronSaveInput,
   HermesCronJobsResult,
   HermesMutationResult,
+  HermesModelsResult,
   HermesSessionResult,
   HermesSessionsResult,
 } from "./hermes.ts";
@@ -226,6 +236,13 @@ export const WS_METHODS = {
   // Hermes control center
   hermesListSessions: "hermes.listSessions",
   hermesGetSession: "hermes.getSession",
+  hermesListModels: "hermes.listModels",
+  hermesCreateSession: "hermes.createSession",
+  hermesSendMessage: "hermes.sendMessage",
+  hermesSteerChat: "hermes.steerChat",
+  hermesCancelChat: "hermes.cancelChat",
+  hermesGetApproval: "hermes.getApproval",
+  hermesRespondApproval: "hermes.respondApproval",
   hermesListCronJobs: "hermes.listCronJobs",
   hermesCronAction: "hermes.cronAction",
   hermesSaveCron: "hermes.saveCron",
@@ -309,6 +326,48 @@ export const WsHermesListSessionsRpc = Rpc.make(WS_METHODS.hermesListSessions, {
 export const WsHermesGetSessionRpc = Rpc.make(WS_METHODS.hermesGetSession, {
   payload: Schema.Struct({ sessionId: Schema.String }),
   success: HermesSessionResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesListModelsRpc = Rpc.make(WS_METHODS.hermesListModels, {
+  payload: Schema.Struct({}),
+  success: HermesModelsResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesCreateSessionRpc = Rpc.make(WS_METHODS.hermesCreateSession, {
+  payload: HermesCreateSessionInput,
+  success: HermesSessionResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesSendMessageRpc = Rpc.make(WS_METHODS.hermesSendMessage, {
+  payload: HermesChatSendInput,
+  success: HermesChatStartResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesSteerChatRpc = Rpc.make(WS_METHODS.hermesSteerChat, {
+  payload: HermesChatSteerInput,
+  success: HermesChatSteerResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesCancelChatRpc = Rpc.make(WS_METHODS.hermesCancelChat, {
+  payload: HermesChatCancelInput,
+  success: HermesChatCancelResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesGetApprovalRpc = Rpc.make(WS_METHODS.hermesGetApproval, {
+  payload: Schema.Struct({ sessionId: Schema.String }),
+  success: HermesApprovalPendingResult,
+  error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
+});
+
+export const WsHermesRespondApprovalRpc = Rpc.make(WS_METHODS.hermesRespondApproval, {
+  payload: HermesApprovalRespondInput,
+  success: HermesMutationResult,
   error: Schema.Union([HermesBridgeError, EnvironmentAuthorizationError]),
 });
 
@@ -737,6 +796,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpdateSettingsRpc,
   WsHermesListSessionsRpc,
   WsHermesGetSessionRpc,
+  WsHermesListModelsRpc,
+  WsHermesCreateSessionRpc,
+  WsHermesSendMessageRpc,
+  WsHermesSteerChatRpc,
+  WsHermesCancelChatRpc,
+  WsHermesGetApprovalRpc,
+  WsHermesRespondApprovalRpc,
   WsHermesListCronJobsRpc,
   WsHermesCronActionRpc,
   WsHermesSaveCronRpc,

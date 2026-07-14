@@ -306,6 +306,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:hermes:session",
       tag: WS_METHODS.hermesGetSession,
     }),
+    hermesModels: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:hermes:models",
+      tag: WS_METHODS.hermesListModels,
+    }),
+    hermesApproval: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:hermes:approval",
+      tag: WS_METHODS.hermesGetApproval,
+    }),
     hermesCronJobs: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:hermes:cron-jobs",
       tag: WS_METHODS.hermesListCronJobs,
@@ -358,6 +366,26 @@ export function createServerEnvironmentAtoms<R, E>(
     hermesCronAction: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:hermes:cron-action",
       tag: WS_METHODS.hermesCronAction,
+    }),
+    hermesCreateSession: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:create-session",
+      tag: WS_METHODS.hermesCreateSession,
+    }),
+    hermesSendMessage: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:send-message",
+      tag: WS_METHODS.hermesSendMessage,
+    }),
+    hermesSteerChat: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:steer-chat",
+      tag: WS_METHODS.hermesSteerChat,
+    }),
+    hermesCancelChat: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:cancel-chat",
+      tag: WS_METHODS.hermesCancelChat,
+    }),
+    hermesRespondApproval: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:hermes:respond-approval",
+      tag: WS_METHODS.hermesRespondApproval,
     }),
     hermesSaveCron: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:hermes:save-cron",

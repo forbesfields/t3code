@@ -299,6 +299,13 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
   [WS_METHODS.hermesListSessions, AuthOrchestrationReadScope],
   [WS_METHODS.hermesGetSession, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesListModels, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesCreateSession, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesSendMessage, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesSteerChat, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesCancelChat, AuthOrchestrationOperateScope],
+  [WS_METHODS.hermesGetApproval, AuthOrchestrationReadScope],
+  [WS_METHODS.hermesRespondApproval, AuthOrchestrationOperateScope],
   [WS_METHODS.hermesListCronJobs, AuthOrchestrationReadScope],
   [WS_METHODS.hermesCronAction, AuthOrchestrationOperateScope],
   [WS_METHODS.hermesSaveCron, AuthOrchestrationOperateScope],
@@ -1311,6 +1318,42 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.hermesGetSession, HermesBridgeClient.getSession(sessionId), {
             "rpc.aggregate": "hermes",
           }),
+        [WS_METHODS.hermesListModels]: (_input) =>
+          observeRpcEffect(WS_METHODS.hermesListModels, HermesBridgeClient.listModels, {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesCreateSession]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.hermesCreateSession,
+            HermesBridgeClient.createSession(input),
+            {
+              "rpc.aggregate": "hermes",
+            },
+          ),
+        [WS_METHODS.hermesSendMessage]: (input) =>
+          observeRpcEffect(WS_METHODS.hermesSendMessage, HermesBridgeClient.sendMessage(input), {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesSteerChat]: (input) =>
+          observeRpcEffect(WS_METHODS.hermesSteerChat, HermesBridgeClient.steerChat(input), {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesCancelChat]: (input) =>
+          observeRpcEffect(WS_METHODS.hermesCancelChat, HermesBridgeClient.cancelChat(input), {
+            "rpc.aggregate": "hermes",
+          }),
+        [WS_METHODS.hermesGetApproval]: ({ sessionId }) =>
+          observeRpcEffect(
+            WS_METHODS.hermesGetApproval,
+            HermesBridgeClient.getApproval(sessionId),
+            { "rpc.aggregate": "hermes" },
+          ),
+        [WS_METHODS.hermesRespondApproval]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.hermesRespondApproval,
+            HermesBridgeClient.respondApproval(input),
+            { "rpc.aggregate": "hermes" },
+          ),
         [WS_METHODS.hermesListCronJobs]: (_input) =>
           observeRpcEffect(WS_METHODS.hermesListCronJobs, HermesBridgeClient.listCronJobs, {
             "rpc.aggregate": "hermes",
