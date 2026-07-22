@@ -59,6 +59,7 @@ const encodedDefaultServerSettings = encodeServerSettings(DEFAULT_SERVER_SETTING
 
 const defaultClaudeSettings: ClaudeSettings = Schema.decodeSync(ClaudeSettings)({});
 const defaultCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({});
+const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
   enabled: false,
 });
@@ -104,6 +105,7 @@ type TestClaudeCapabilities = {
   readonly email: string | undefined;
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
+  readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
 };
 
@@ -113,6 +115,7 @@ function claudeCapabilities(overrides: Partial<TestClaudeCapabilities> = {}) {
       email: undefined,
       subscriptionType: undefined,
       tokenSource: undefined,
+      apiProvider: undefined,
       slashCommands: [],
       ...overrides,
     });
@@ -361,6 +364,21 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               shortDescription: "Debug failing GitHub Actions checks",
             },
           ]);
+        }),
+      );
+
+      it.effect("passes configured launch args to the Codex provider probe", () =>
+        Effect.gen(function* () {
+          let observedLaunchArgs: string | undefined;
+          const settings = decodeCodexSettings({ launchArgs: "--strict-config --enable foo" });
+
+          const status = yield* checkCodexProviderStatus(settings, (input) => {
+            observedLaunchArgs = input.launchArgs;
+            return Effect.succeed(makeCodexProbeSnapshot());
+          });
+
+          assert.strictEqual(status.status, "ready");
+          assert.strictEqual(observedLaunchArgs, "--strict-config --enable foo");
         }),
       );
 
@@ -1414,7 +1432,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
               Layer.provideMerge(
                 mockCommandSpawnerLayer((command, args) => {
-                  if (command === "agent") {
+                  if (command === "cursor-agent") {
                     cursorSpawned = true;
                   }
                   const joined = args.join(" ");
@@ -1505,6 +1523,30 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   stderr: "",
                   code: 0,
                 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+      );
+
+      it.effect("returns ready and labels Bedrock-backed Claude as authenticated", () =>
+        Effect.gen(function* () {
+          // Bedrock authenticates via external AWS credentials, so the SDK init
+          // reports only `apiProvider` with no subscription or token.
+          const status = yield* checkClaudeProviderStatus(
+            defaultClaudeSettings,
+            claudeCapabilities({ apiProvider: "bedrock" }),
+          );
+          assert.strictEqual(status.status, "ready");
+          assert.strictEqual(status.installed, true);
+          assert.strictEqual(status.auth.status, "authenticated");
+          assert.strictEqual(status.auth.type, "bedrock");
+          assert.strictEqual(status.auth.label, "Amazon Bedrock");
+        }).pipe(
+          Effect.provide(
+            mockSpawnerLayer((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
               throw new Error(`Unexpected args: ${joined}`);
             }),
           ),
@@ -1738,8 +1780,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         ),
       );
 
-      it.effect("runs Claude status probes with the configured Claude HOME", () => {
-        const claudeHome = "/tmp/t3code-claude-home";
+      it.effect("runs Claude status probes with the configured CLAUDE_CONFIG_DIR", () => {
+        const claudeConfigDir = "/tmp/t3code-claude-home";
         const recorded = recordingMockSpawnerLayer((args) => {
           const joined = args.join(" ");
           if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
@@ -1756,14 +1798,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           const status = yield* checkClaudeProviderStatus(
             {
               ...defaultClaudeSettings,
-              homePath: claudeHome,
+              homePath: claudeConfigDir,
             },
             claudeCapabilities(),
           );
           assert.strictEqual(status.status, "ready");
           assert.deepStrictEqual(
-            recorded.commands.map((command) => command.env?.HOME),
-            [claudeHome],
+            recorded.commands.map((command) => command.env?.CLAUDE_CONFIG_DIR),
+            [claudeConfigDir],
           );
         }).pipe(Effect.provide(recorded.layer));
       });

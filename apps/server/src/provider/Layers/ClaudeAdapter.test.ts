@@ -418,7 +418,7 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("runs Claude SDK sessions with the configured Claude HOME", () => {
+  it.effect("runs Claude SDK sessions with the configured CLAUDE_CONFIG_DIR", () => {
     const harness = makeHarness({ claudeConfig: { homePath: "~/.claude-work" } });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
@@ -433,7 +433,10 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const createInput = harness.getLastCreateQueryInput();
-      assert.equal(createInput?.options.env?.HOME, NodePath.join(NodeOS.homedir(), ".claude-work"));
+      assert.equal(
+        createInput?.options.env?.CLAUDE_CONFIG_DIR,
+        NodePath.join(NodeOS.homedir(), ".claude-work"),
+      );
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -3042,7 +3045,7 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      assert.deepEqual(harness.query.setModelCalls, ["claude-opus-4-6"]);
+      assert.deepEqual(harness.query.setModelCalls, ["claude-opus-4-6[1m]"]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -3140,10 +3143,11 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "hello again",
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("claudeAgent"),
-          model: "claude-opus-4-6",
-        },
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("claudeAgent"),
+          "claude-opus-4-6",
+          [{ id: "contextWindow", value: "200k" }],
+        ),
         attachments: [],
       });
 
