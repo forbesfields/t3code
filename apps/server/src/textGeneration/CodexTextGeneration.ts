@@ -97,7 +97,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateAdvisorReview",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -158,7 +159,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateAdvisorReview";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -395,10 +397,22 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateAdvisorReview: TextGeneration.TextGeneration["Service"]["generateAdvisorReview"] =
+    Effect.fn("CodexTextGeneration.generateAdvisorReview")(function* (input) {
+      return yield* runCodexJson({
+        operation: "generateAdvisorReview",
+        cwd: input.cwd,
+        prompt: input.prompt,
+        outputSchemaJson: TextGeneration.AdvisorReviewGenerationOutput,
+        modelSelection: input.modelSelection,
+      });
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateAdvisorReview,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

@@ -1,4 +1,7 @@
-// @effect-diagnostics globalDate:off globalDateInEffect:off cryptoRandomUUID:off cryptoRandomUUIDInEffect:off outdatedApi:off
+// @effect-diagnostics globalDate:off globalDateInEffect:off cryptoRandomUUID:off cryptoRandomUUIDInEffect:off outdatedApi:off nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import {
   EventId,
   type PiSettings,
@@ -25,6 +28,7 @@ import {
 } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import { PiRpcProcess } from "./PiRpcProcess.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 
 const PROVIDER = ProviderDriverKind.make("pi");
 
@@ -41,7 +45,41 @@ interface PiSessionContext {
   readonly startedItems: Set<string>;
   readonly pendingUi: Map<string, PendingUiRequest>;
   turns: Array<{ id: TurnId; items: Array<unknown> }>;
+  readonly mcpConfigDir: string | undefined;
   stopped: boolean;
+}
+
+function removeMcpConfigDirectory(directory: string | undefined): void {
+  if (!directory) return;
+  try {
+    NodeFS.rmSync(directory, { recursive: true, force: true });
+  } catch {
+    // Credential revocation still protects the endpoint; cleanup is best effort.
+  }
+}
+
+function createMcpConfig(threadId: ThreadId): { directory: string; path: string } | undefined {
+  const session = McpProviderSession.readMcpProviderSession(threadId);
+  if (!session) return undefined;
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pi-mcp-"));
+  const configPath = NodePath.join(directory, "mcp.json");
+  NodeFS.writeFileSync(
+    configPath,
+    JSON.stringify({
+      settings: { disableProxyTool: true },
+      mcpServers: {
+        t3_code: {
+          type: "http",
+          url: session.endpoint,
+          headers: { Authorization: session.authorizationHeader },
+          directTools: ["advisor_consult"],
+          lifecycle: "lazy",
+        },
+      },
+    }),
+    { encoding: "utf8", mode: 0o600 },
+  );
+  return { directory, path: configPath };
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -326,11 +364,18 @@ export function makePiAdapter(
       if (existing) {
         existing.stopped = true;
         existing.client.close();
+        removeMcpConfigDirectory(existing.mcpConfigDir);
         sessions.delete(input.threadId);
       }
       const now = new Date().toISOString();
       let context!: PiSessionContext;
-      const args = ["--session-id", input.threadId, "--approve"];
+      const mcpConfig = createMcpConfig(input.threadId);
+      const args = [
+        "--session-id",
+        input.threadId,
+        "--approve",
+        ...(mcpConfig ? ["--mcp-config", mcpConfig.path] : []),
+      ];
       const client = new PiRpcProcess({
         binaryPath: settings.binaryPath,
         cwd: input.cwd ?? process.cwd(),
@@ -346,6 +391,7 @@ export function makePiAdapter(
         onExit: (detail) => {
           if (!context || context.stopped) return;
           context.stopped = true;
+          removeMcpConfigDirectory(context.mcpConfigDir);
           context.session = {
             ...context.session,
             status: "error",
@@ -381,25 +427,37 @@ export function makePiAdapter(
         startedItems: new Set(),
         pendingUi: new Map(),
         turns: [],
+        mcpConfigDir: mcpConfig?.directory,
         stopped: false,
       };
       sessions.set(input.threadId, context);
 
-      yield* rpc(context, { type: "get_state" }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProviderAdapterProcessError({
-              provider: PROVIDER,
-              threadId: input.threadId,
-              detail: cause.message,
-              cause,
-            }),
+      yield* Effect.gen(function* () {
+        yield* rpc(context, { type: "get_state" }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapterProcessError({
+                provider: PROVIDER,
+                threadId: input.threadId,
+                detail: cause.message,
+                cause,
+              }),
+          ),
+        );
+        if (input.modelSelection?.model) {
+          const selected = modelParts(input.modelSelection.model);
+          if (selected) yield* rpc(context, { type: "set_model", ...selected });
+        }
+      }).pipe(
+        Effect.onError(() =>
+          Effect.sync(() => {
+            context.stopped = true;
+            context.client.close();
+            removeMcpConfigDirectory(context.mcpConfigDir);
+            sessions.delete(context.threadId);
+          }),
         ),
       );
-      if (input.modelSelection?.model) {
-        const selected = modelParts(input.modelSelection.model);
-        if (selected) yield* rpc(context, { type: "set_model", ...selected });
-      }
       context.session = {
         ...context.session,
         status: "ready",
@@ -567,6 +625,7 @@ export function makePiAdapter(
         if (context.stopped) return;
         context.stopped = true;
         context.client.close();
+        removeMcpConfigDirectory(context.mcpConfigDir);
         context.session = {
           ...context.session,
           status: "closed",
@@ -625,4 +684,40 @@ export function makePiAdapter(
 
     return adapter;
   });
+}
+
+export async function runPiCommand(input: {
+  readonly settings: PiSettings;
+  readonly cwd: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly command: string;
+}): Promise<{
+  notifications: ReadonlyArray<{ message: string; type: "info" | "warning" | "error" }>;
+}> {
+  const notifications: Array<{ message: string; type: "info" | "warning" | "error" }> = [];
+  const client = new PiRpcProcess({
+    binaryPath: input.settings.binaryPath,
+    cwd: input.cwd,
+    args: ["--no-session"],
+    env: { ...process.env, ...input.environment, PI_CODING_AGENT_DIR: input.settings.agentDir },
+    onEvent: (event) => {
+      if (event.type !== "extension_ui_request" || event.method !== "notify") return;
+      if (typeof event.message !== "string" || !event.message.trim()) return;
+      notifications.push({
+        message: event.message.trim(),
+        type:
+          event.notifyType === "error"
+            ? "error"
+            : event.notifyType === "warning"
+              ? "warning"
+              : "info",
+      });
+    },
+  });
+  try {
+    await client.request({ type: "prompt", message: input.command }, 30_000);
+    return { notifications };
+  } finally {
+    client.close();
+  }
 }

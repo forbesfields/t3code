@@ -77,8 +77,29 @@ export const ServerProviderSlashCommand = Schema.Struct({
   name: TrimmedNonEmptyString,
   description: Schema.optional(TrimmedNonEmptyString),
   input: Schema.optional(ServerProviderSlashCommandInput),
+  /** Pi distinguishes immediate extension commands from prompt/skill expansion. */
+  source: Schema.optional(Schema.Literals(["extension", "prompt", "skill"])),
 });
 export type ServerProviderSlashCommand = typeof ServerProviderSlashCommand.Type;
+
+export const PiCommandRunInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  command: TrimmedNonEmptyString,
+  cwd: Schema.optional(TrimmedNonEmptyString),
+});
+export type PiCommandRunInput = typeof PiCommandRunInput.Type;
+
+export const PiCommandNotification = Schema.Struct({
+  message: TrimmedNonEmptyString,
+  type: Schema.Literals(["info", "warning", "error"]),
+});
+export type PiCommandNotification = typeof PiCommandNotification.Type;
+
+export const PiCommandRunResult = Schema.Struct({
+  notifications: Schema.Array(PiCommandNotification),
+  error: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type PiCommandRunResult = typeof PiCommandRunResult.Type;
 
 export const ServerProviderSkill = Schema.Struct({
   name: TrimmedNonEmptyString,
@@ -185,6 +206,7 @@ export const ServerProvider = Schema.Struct({
   continuation: Schema.optional(ServerProviderContinuation),
   showInteractionModeToggle: Schema.optional(Schema.Boolean),
   requiresNewThreadForModelChange: Schema.optional(Schema.Boolean),
+  supportsAdvisorReview: Schema.optional(Schema.Boolean),
   enabled: Schema.Boolean,
   installed: Schema.Boolean,
   version: Schema.NullOr(TrimmedNonEmptyString),

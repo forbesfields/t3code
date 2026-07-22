@@ -35,6 +35,7 @@ export interface ProjectThreadAwarenessInput {
     | "id"
     | "title"
     | "modelSelection"
+    | "advisor"
     | "session"
     | "latestTurn"
     | "updatedAt"
@@ -90,6 +91,13 @@ function resolveThreadAwarenessPhase(
   }
   if (thread.hasPendingUserInput) {
     return "waiting_for_input";
+  }
+  if (
+    thread.advisor &&
+    thread.advisor.state.status !== "approved" &&
+    thread.advisor.state.status !== "stopped"
+  ) {
+    return thread.advisor.state.status === "waiting_for_input" ? "waiting_for_input" : "running";
   }
   if (thread.session?.status === "error" || thread.latestTurn?.state === "error") {
     return "failed";

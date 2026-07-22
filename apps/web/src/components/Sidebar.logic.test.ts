@@ -117,6 +117,38 @@ describe("hasUnseenCompletion", () => {
       }),
     ).toBe(false);
   });
+
+  it("suppresses completion while an orchestrator review is unresolved", () => {
+    expect(
+      hasUnseenCompletion({
+        hasActionableProposedPlan: false,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        interactionMode: "default",
+        latestTurn: makeLatestTurn(),
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+        session: null,
+        advisor: {
+          config: {
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claude_review"),
+              model: "opus",
+            },
+            maxCorrectionAttempts: 2,
+          },
+          state: {
+            status: "reviewing",
+            correctionAttempts: 0,
+            activeTurnId: null,
+            blockers: [],
+            lastReview: null,
+            error: null,
+            updatedAt: "2026-03-09T10:05:00.000Z",
+          },
+        },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("createThreadJumpHintVisibilityController", () => {

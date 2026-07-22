@@ -52,7 +52,8 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateAdvisorReview";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -81,6 +82,11 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       });
 
       const promptResult = yield* Effect.gen(function* () {
+        if (operation === "generateAdvisorReview") {
+          yield* runtime.handleRequestPermission(() =>
+            Effect.succeed({ outcome: { outcome: "cancelled" as const } }),
+          );
+        }
         yield* runtime.start();
         yield* Effect.ignore(runtime.setMode("ask"));
         yield* applyCursorAcpModelSelection({
@@ -253,10 +259,22 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateAdvisorReview: TextGeneration.TextGeneration["Service"]["generateAdvisorReview"] =
+    Effect.fn("CursorTextGeneration.generateAdvisorReview")(function* (input) {
+      return yield* runCursorJson({
+        operation: "generateAdvisorReview",
+        cwd: input.cwd,
+        prompt: input.prompt,
+        outputSchemaJson: TextGeneration.AdvisorReviewGenerationOutput,
+        modelSelection: input.modelSelection,
+      });
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateAdvisorReview,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

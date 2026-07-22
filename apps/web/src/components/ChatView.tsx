@@ -5,6 +5,8 @@ import {
   type EnvironmentId,
   type MessageId,
   type ModelSelection,
+  type OrchestrationAdvisorConfig,
+  type OrchestrationAdvisorAction,
   type ProjectScript,
   type ProjectId,
   type ProviderApprovalDecision,
@@ -997,6 +999,7 @@ function ChatViewContent(props: ChatViewProps) {
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
+  const runPiCommand = useAtomCommand(serverEnvironment.runPiCommand, { reportFailure: false });
   const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
@@ -1019,6 +1022,9 @@ function ChatViewContent(props: ChatViewProps) {
     reportFailure: false,
   });
   const respondToThreadUserInput = useAtomCommand(threadEnvironment.respondToUserInput, {
+    reportFailure: false,
+  });
+  const respondToThreadAdvisor = useAtomCommand(threadEnvironment.respondToAdvisor, {
     reportFailure: false,
   });
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
@@ -1376,7 +1382,11 @@ function ChatViewContent(props: ChatViewProps) {
         : nextThreadIds;
     });
   }, [activeThreadKey, existingOpenTerminalThreadKeys, terminalUiState.terminalOpen]);
-  const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
+  const latestTurnSettled = isLatestTurnSettled(
+    activeLatestTurn,
+    activeThread?.session ?? null,
+    activeThread?.advisor?.state ?? null,
+  );
   const activeProjectRef = activeThread
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
@@ -1812,7 +1822,26 @@ function ChatViewContent(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError,
   });
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const advisorStatus = activeThread?.advisor?.state.status;
+  const isAdvisorWorking = advisorStatus === "reviewing" || advisorStatus === "correcting";
+  const isWorking =
+    phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isAdvisorWorking;
+  const previousAdvisorStatusRef = useRef(advisorStatus);
+  useEffect(() => {
+    const previous = previousAdvisorStatusRef.current;
+    previousAdvisorStatusRef.current = advisorStatus;
+    if (advisorStatus !== "waiting_for_input" || previous === "waiting_for_input") return;
+    toastManager.add(
+      stackedThreadToast({
+        type: "warning",
+        title: "Orchestrator needs your input",
+        description: activeThread
+          ? `${activeThread.title}: review the open blockers and choose Retry, Bypass once, or Stop.`
+          : "Review the open blockers and choose an action.",
+        data: { threadRef: activeThreadRef },
+      }),
+    );
+  }, [activeThread, activeThreadRef, advisorStatus]);
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -3078,6 +3107,7 @@ function ChatViewContent(props: ChatViewProps) {
       threadId: ThreadId;
       createdAt: string;
       modelSelection?: ModelSelection;
+      advisorConfig?: OrchestrationAdvisorConfig | null;
       runtimeMode: RuntimeMode;
       interactionMode: ProviderInteractionMode;
     }): Promise<AtomCommandResult<void, unknown>> => {
@@ -3106,6 +3136,23 @@ function ChatViewContent(props: ChatViewProps) {
         if (result._tag === "Failure") {
           return result;
         }
+      }
+
+      if (
+        input.advisorConfig !== undefined &&
+        JSON.stringify(input.advisorConfig) !== JSON.stringify(serverThread.advisor?.config ?? null)
+      ) {
+        result = mapAtomCommandResult(
+          await updateThreadMetadata({
+            environmentId,
+            input: {
+              threadId: input.threadId,
+              advisorConfig: input.advisorConfig,
+            },
+          }),
+          () => undefined,
+        );
+        if (result._tag === "Failure") return result;
       }
 
       if (input.runtimeMode !== serverThread.runtimeMode) {
@@ -3875,6 +3922,74 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
+  const onAdvisorAction = useCallback(
+    async (action: OrchestrationAdvisorAction) => {
+      if (!activeThread) return;
+      if (action === "retry") {
+        const draft = useComposerDraftStore.getState().getComposerDraft(composerDraftTarget);
+        const selection = draft?.advisorModelSelection;
+        if (
+          selection &&
+          JSON.stringify(selection) !==
+            JSON.stringify(activeThread.advisor?.config.modelSelection ?? null)
+        ) {
+          const changed = await updateThreadMetadata({
+            environmentId,
+            input: {
+              threadId: activeThread.id,
+              advisorConfig: { modelSelection: selection, maxCorrectionAttempts: 2 },
+            },
+          });
+          if (changed._tag === "Failure") {
+            const error = squashAtomCommandFailure(changed);
+            setThreadError(
+              activeThread.id,
+              error instanceof Error ? error.message : "Failed to change orchestrator.",
+            );
+            return;
+          }
+        }
+      }
+      const result = await respondToThreadAdvisor({
+        environmentId,
+        input: { threadId: activeThread.id, action },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to handle orchestrator action.",
+        );
+      }
+    },
+    [
+      activeThread,
+      composerDraftTarget,
+      environmentId,
+      respondToThreadAdvisor,
+      setThreadError,
+      updateThreadMetadata,
+    ],
+  );
+
+  const onAdvisorConfigChange = useCallback(
+    async (advisorConfig: OrchestrationAdvisorConfig | null) => {
+      if (!activeThread || !isServerThread) return;
+      const result = await updateThreadMetadata({
+        environmentId,
+        input: { threadId: activeThread.id, advisorConfig },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to update orchestrated mode.",
+        );
+      }
+    },
+    [activeThread, environmentId, isServerThread, setThreadError, updateThreadMetadata],
+  );
+
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     if (
@@ -3904,6 +4019,19 @@ function ChatViewContent(props: ChatViewProps) {
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
     const promptForSend = promptRef.current;
+    const composerDraftForSend = useComposerDraftStore
+      .getState()
+      .getComposerDraft(composerDraftTarget);
+    const advisorConfigForSend: OrchestrationAdvisorConfig | null = composerDraftForSend
+      ? composerDraftForSend.orchestrated && composerDraftForSend.advisorModelSelection
+        ? {
+            modelSelection: composerDraftForSend.advisorModelSelection,
+            maxCorrectionAttempts: 2,
+          }
+        : composerDraftForSend.advisorModelSelection !== null
+          ? null
+          : (activeThread.advisor?.config ?? null)
+      : (activeThread.advisor?.config ?? null);
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -3945,6 +4073,60 @@ function ChatViewContent(props: ChatViewProps) {
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
+      return;
+    }
+    const piCommandName = trimmed.startsWith("/") ? trimmed.slice(1).split(/\s/, 1)[0] : null;
+    const piCommand =
+      ctxSelectedProvider === "pi" && piCommandName
+        ? providerStatuses
+            .find((provider) => provider.instanceId === ctxSelectedModelSelection.instanceId)
+            ?.slashCommands.find(
+              (command) => command.name === piCommandName && command.source === "extension",
+            )
+        : undefined;
+    if (piCommand) {
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      const result = await runPiCommand({
+        environmentId,
+        input: {
+          instanceId: ctxSelectedModelSelection.instanceId,
+          command: trimmed,
+          ...(activeProject ? { cwd: activeProject.workspaceRoot } : {}),
+        },
+      });
+      if (result._tag === "Failure") {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: `/${piCommand.name} failed`,
+          description: error instanceof Error ? error.message : "Failed to run Pi command.",
+        });
+      } else if (result.value.error) {
+        toastManager.add({
+          type: "error",
+          title: `/${piCommand.name} failed`,
+          description: result.value.error,
+        });
+      } else {
+        const notifications = result.value.notifications;
+        if (notifications.length === 0) {
+          toastManager.add({ type: "success", title: `/${piCommand.name} completed` });
+        }
+        for (const notification of notifications) {
+          toastManager.add({
+            type:
+              notification.type === "warning"
+                ? "warning"
+                : notification.type === "error"
+                  ? "error"
+                  : "success",
+            title: `/${piCommand.name}`,
+            description: notification.message,
+          });
+        }
+      }
       return;
     }
     if (!hasSendableContent) {
@@ -4117,6 +4299,7 @@ function ChatViewContent(props: ChatViewProps) {
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
         ...(ctxSelectedModel ? { modelSelection: ctxSelectedModelSelection } : {}),
+        advisorConfig: advisorConfigForSend,
         runtimeMode,
         interactionMode,
       });
@@ -4141,6 +4324,7 @@ function ChatViewContent(props: ChatViewProps) {
                       projectId: activeProject.id,
                       title,
                       modelSelection: threadCreateModelSelection,
+                      advisorConfig: advisorConfigForSend,
                       runtimeMode,
                       interactionMode,
                       branch: activeThreadBranch,
@@ -5101,6 +5285,7 @@ function ChatViewContent(props: ChatViewProps) {
                 contentInsetEndAdjustment={composerOverlayHeight}
                 onIsAtEndChange={onIsAtEndChange}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
+                onAdvisorAction={(action) => void onAdvisorAction(action)}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
@@ -5202,6 +5387,7 @@ function ChatViewContent(props: ChatViewProps) {
                         onChangeActivePendingUserInputCustomAnswer
                       }
                       onProviderModelSelect={onProviderModelSelect}
+                      onAdvisorConfigChange={(config) => void onAdvisorConfigChange(config)}
                       getModelDisabledReason={getModelDisabledReason}
                       toggleInteractionMode={toggleInteractionMode}
                       handleRuntimeModeChange={handleRuntimeModeChange}

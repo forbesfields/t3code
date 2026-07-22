@@ -1,16 +1,11 @@
-import {
-  PiSettings,
-  ProviderDriverKind,
-  TextGenerationError,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { PiSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import * as TextGeneration from "../../textGeneration/TextGeneration.ts";
+import { makePiTextGeneration } from "../../textGeneration/PiTextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import {
@@ -33,37 +28,6 @@ const decodeSettings = Schema.decodeSync(PiSettings);
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
 export type PiDriverEnv = ServerConfig | ServerSettingsService;
-
-const unsupportedTextGeneration = TextGeneration.TextGeneration.of({
-  generateCommitMessage: () =>
-    Effect.fail(
-      new TextGenerationError({
-        operation: "generateCommitMessage",
-        detail: "Pi is not configured for one-shot Git text generation.",
-      }),
-    ),
-  generatePrContent: () =>
-    Effect.fail(
-      new TextGenerationError({
-        operation: "generatePrContent",
-        detail: "Pi is not configured for one-shot Git text generation.",
-      }),
-    ),
-  generateBranchName: () =>
-    Effect.fail(
-      new TextGenerationError({
-        operation: "generateBranchName",
-        detail: "Pi is not configured for one-shot Git text generation.",
-      }),
-    ),
-  generateThreadTitle: () =>
-    Effect.fail(
-      new TextGenerationError({
-        operation: "generateThreadTitle",
-        detail: "Pi is not configured for one-shot title generation.",
-      }),
-    ),
-});
 
 const stampIdentity =
   (input: {
@@ -108,6 +72,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
         instanceId,
         environment: processEnvironment,
       });
+      const textGeneration = makePiTextGeneration(effectiveConfig, processEnvironment);
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
       const maintenanceCapabilities = makeManualOnlyProviderMaintenanceCapabilities({
         provider: DRIVER_KIND,
@@ -144,9 +109,10 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        supportsAdvisorReview: true,
         snapshot,
         adapter,
-        textGeneration: unsupportedTextGeneration,
+        textGeneration,
       } satisfies ProviderInstance;
     }),
 };

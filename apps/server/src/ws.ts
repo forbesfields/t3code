@@ -24,6 +24,7 @@ import {
   CommandId,
   type DiscoveredLocalServerList,
   EventId,
+  PiSettings,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -76,6 +77,7 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import { runPiCommand } from "./provider/pi/PiAdapter.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -116,6 +118,7 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const decodePiSettings = Schema.decodeUnknownEffect(PiSettings);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -288,6 +291,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetConfig, AuthOrchestrationReadScope],
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
+  [WS_METHODS.piRunCommand, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpsertKeybinding, AuthOrchestrationOperateScope],
   [WS_METHODS.serverRemoveKeybinding, AuthOrchestrationOperateScope],
   [WS_METHODS.serverGetSettings, AuthOrchestrationReadScope],
@@ -1271,6 +1275,49 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "server",
             },
+          ),
+        [WS_METHODS.piRunCommand]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.piRunCommand,
+            Effect.gen(function* () {
+              if (!input.command.startsWith("/")) {
+                return { notifications: [], error: "Pi commands must start with /." };
+              }
+              const settings = yield* serverSettings.getSettings.pipe(
+                Effect.orElseSucceed(() => null),
+              );
+              if (settings === null) {
+                return { notifications: [], error: "Could not read Pi settings." };
+              }
+              const instance = settings.providerInstances[input.instanceId];
+              if (instance !== undefined && instance.driver !== "pi") {
+                return { notifications: [], error: "The selected provider is not Pi." };
+              }
+              const piSettings = yield* decodePiSettings(
+                instance?.config ?? settings.providers.pi,
+              ).pipe(Effect.orElseSucceed(() => null));
+              if (piSettings === null) {
+                return { notifications: [], error: "Pi settings are invalid." };
+              }
+              const environment = Object.fromEntries(
+                (instance?.environment ?? []).map((entry) => [entry.name, entry.value]),
+              );
+              return yield* Effect.promise(() =>
+                runPiCommand({
+                  settings: piSettings,
+                  cwd: input.cwd ?? config.cwd,
+                  environment,
+                  command: input.command,
+                }).then(
+                  (result) => ({ ...result, error: null }),
+                  (cause) => ({
+                    notifications: [],
+                    error: cause instanceof Error ? cause.message : "Failed to run Pi command.",
+                  }),
+                ),
+              );
+            }),
+            { "rpc.aggregate": "pi" },
           ),
         [WS_METHODS.serverUpsertKeybinding]: (rule) =>
           observeRpcEffect(

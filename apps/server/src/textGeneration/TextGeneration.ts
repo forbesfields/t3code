@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
 
@@ -73,6 +74,28 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export const AdvisorReviewGenerationOutput = Schema.Struct({
+  verdict: Schema.Literals(["continue", "ship", "fix", "need_human"]),
+  summary: Schema.String,
+  instruction: Schema.optional(Schema.String),
+  evidenceSummary: Schema.String,
+  blockers: Schema.Array(
+    Schema.Struct({
+      id: Schema.optional(Schema.String),
+      requirement: Schema.String,
+      evidenceRequired: Schema.String,
+      status: Schema.Literals(["open", "resolved"]),
+    }),
+  ),
+});
+export type AdvisorReviewGenerationOutput = typeof AdvisorReviewGenerationOutput.Type;
+
+export interface AdvisorReviewGenerationInput {
+  cwd: string;
+  prompt: string;
+  modelSelection: ModelSelection;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -80,6 +103,9 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  generateAdvisorReview(
+    input: AdvisorReviewGenerationInput,
+  ): Promise<AdvisorReviewGenerationOutput>;
 }
 
 /**
@@ -115,6 +141,10 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    readonly generateAdvisorReview: (
+      input: AdvisorReviewGenerationInput,
+    ) => Effect.Effect<AdvisorReviewGenerationOutput, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -125,7 +155,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateAdvisorReview";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -164,6 +195,10 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    generateAdvisorReview: (input) =>
+      resolveInstance(registry, "generateAdvisorReview", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.generateAdvisorReview(input)),
       ),
   });
 

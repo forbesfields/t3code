@@ -1,6 +1,8 @@
 import {
   type EnvironmentId,
   type MessageId,
+  type OrchestrationAdvisorAction,
+  type OrchestrationAdvisorReview,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
@@ -134,6 +136,7 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
+  onAdvisorAction: (action: OrchestrationAdvisorAction) => void;
 }
 
 interface TimelineRowActivityState {
@@ -147,6 +150,7 @@ const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const NOOP_ADVISOR_ACTION = () => {};
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -179,6 +183,7 @@ interface MessagesTimelineProps {
   contentInsetEndAdjustment: number;
   onIsAtEndChange: (isAtEnd: boolean) => void;
   onManualNavigation: () => void;
+  onAdvisorAction?: (action: OrchestrationAdvisorAction) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +217,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   contentInsetEndAdjustment,
   onIsAtEndChange,
   onManualNavigation,
+  onAdvisorAction = NOOP_ADVISOR_ACTION,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -421,6 +427,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
+      onAdvisorAction,
     }),
     [
       timestampFormat,
@@ -435,6 +442,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
+      onAdvisorAction,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -1134,17 +1142,111 @@ const WorkGroupSection = memo(function WorkGroupSection({
         </p>
       )}
       <div className="space-y-px">
-        {nonEmptyEntries.map((workEntry) => (
-          <SimpleWorkEntryRow
-            key={workEntry.id}
-            workEntry={workEntry}
-            workspaceRoot={workspaceRoot}
-          />
-        ))}
+        {nonEmptyEntries.map((workEntry) =>
+          workEntry.advisorReview ? (
+            <AdvisorReviewCard
+              key={workEntry.id}
+              review={workEntry.advisorReview}
+              model={workEntry.advisorModelSelection?.model ?? "Orchestrator"}
+              status={workEntry.advisorStatus}
+            />
+          ) : (
+            <SimpleWorkEntryRow
+              key={workEntry.id}
+              workEntry={workEntry}
+              workspaceRoot={workspaceRoot}
+            />
+          ),
+        )}
       </div>
     </section>
   );
 });
+
+function AdvisorReviewCard({
+  review,
+  model,
+  status,
+}: {
+  review: OrchestrationAdvisorReview;
+  model: string;
+  status: string | undefined;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const openBlockers = review.blockers.filter((blocker) => blocker.status === "open");
+  const actionRequired = status === "waiting_for_input" || review.verdict === "need_human";
+  return (
+    <details
+      className={cn(
+        "rounded-xl border bg-card/70",
+        actionRequired ? "border-amber-500/45" : "border-border/75",
+      )}
+      open={actionRequired || undefined}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs [&::-webkit-details-marker]:hidden">
+        <BotIcon className="size-4 text-primary" />
+        <span className="font-medium capitalize">{review.stage} orchestrator review</span>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {review.verdict}
+        </span>
+        <span className="ml-auto truncate text-[10px] text-muted-foreground">
+          {model} · attempt {review.attempt}
+        </span>
+        <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+      </summary>
+      <div className="space-y-3 border-t border-border/60 px-3 py-3 text-xs">
+        <div>
+          <p className="font-medium text-foreground">Evidence</p>
+          <p className="mt-1 text-muted-foreground">{review.evidenceSummary}</p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">Assessment</p>
+          <p className="mt-1 text-muted-foreground">{review.summary}</p>
+        </div>
+        {review.instruction ? (
+          <div>
+            <p className="font-medium text-foreground">Worker instruction</p>
+            <p className="mt-1 text-muted-foreground">{review.instruction}</p>
+          </div>
+        ) : null}
+        {review.blockers.length > 0 ? (
+          <div>
+            <p className="font-medium text-foreground">Blockers</p>
+            <ul className="mt-1 space-y-1.5">
+              {review.blockers.map((blocker) => (
+                <li key={blocker.id} className="rounded-md bg-muted/45 px-2 py-1.5">
+                  <span className="font-medium">{blocker.requirement}</span>
+                  <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                    {blocker.status}
+                  </span>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Evidence: {blocker.evidenceRequired}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {actionRequired ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <Button size="xs" onClick={() => ctx.onAdvisorAction("retry")}>
+              Retry
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => ctx.onAdvisorAction("bypass")}>
+              Bypass once{openBlockers.length > 0 ? ` (${openBlockers.length})` : ""}
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => ctx.onAdvisorAction("stop")}>
+              Stop
+            </Button>
+            <span className="text-[10px] text-muted-foreground">
+              Change the orchestrator picker before Retry to retry with another model.
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
 
 function WorkGroupToggleTimelineRow({
   row,
