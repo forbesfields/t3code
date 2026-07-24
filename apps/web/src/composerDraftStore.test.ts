@@ -131,6 +131,8 @@ function resetComposerDraftStore() {
     logicalProjectDraftThreadKeyByLogicalProjectKey: {},
     stickyModelSelectionByProvider: {},
     stickyActiveProvider: null,
+    stickyOrchestrated: false,
+    stickyAdvisorModelSelection: null,
   });
 }
 
@@ -1575,6 +1577,48 @@ describe("composerDraftStore sticky composer settings", () => {
         claudeAgent: modelSelection(CLAUDE_AGENT_DRIVER, "claude-opus-4-6"),
       },
       activeProvider: "claudeAgent",
+    });
+  });
+
+  it("persists orchestrated mode and its instance-scoped advisor selection", () => {
+    const store = useComposerDraftStore.getState();
+    const threadId = ThreadId.make("thread-orchestrated");
+    const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+    const advisorSelection = createModelSelection(
+      ProviderInstanceId.make("claude_work"),
+      "claude-opus-4-6",
+    );
+
+    store.setAdvisorConfig(threadRef, true, advisorSelection);
+
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toMatchObject({
+      orchestrated: true,
+      advisorModelSelection: advisorSelection,
+    });
+    expect(useComposerDraftStore.getState()).toMatchObject({
+      stickyOrchestrated: true,
+      stickyAdvisorModelSelection: advisorSelection,
+    });
+  });
+
+  it("applies sticky orchestrator settings only when creating a new draft", () => {
+    const store = useComposerDraftStore.getState();
+    const sourceRef = scopeThreadRef(
+      TEST_ENVIRONMENT_ID,
+      ThreadId.make("thread-orchestrated-source"),
+    );
+    const targetId = ThreadId.make("thread-orchestrated-target");
+    const targetRef = scopeThreadRef(TEST_ENVIRONMENT_ID, targetId);
+    const advisorSelection = createModelSelection(CODEX_SECONDARY_INSTANCE, "gpt-5.4");
+
+    store.setAdvisorConfig(sourceRef, true, advisorSelection);
+    expect(draftFor(targetId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+
+    store.applyStickyState(targetRef);
+
+    expect(draftFor(targetId, TEST_ENVIRONMENT_ID)).toMatchObject({
+      orchestrated: true,
+      advisorModelSelection: advisorSelection,
     });
   });
 });

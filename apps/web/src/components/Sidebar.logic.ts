@@ -115,6 +115,7 @@ type ThreadStatusInput = Pick<
   | "hasPendingUserInput"
   | "interactionMode"
   | "latestTurn"
+  | "advisor"
   | "session"
 > & {
   lastVisitedAt?: string | undefined;
@@ -213,6 +214,13 @@ export function useThreadJumpHintVisibility(): {
 }
 
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
+  if (
+    thread.advisor &&
+    thread.advisor.state.status !== "approved" &&
+    thread.advisor.state.status !== "stopped"
+  ) {
+    return false;
+  }
   if (!thread.latestTurn?.completedAt) return false;
   const completedAt = Date.parse(thread.latestTurn.completedAt);
   if (Number.isNaN(completedAt)) return false;
@@ -461,7 +469,7 @@ export function resolveThreadStatusPill(input: {
   const hasPlanReadyPrompt =
     !thread.hasPendingUserInput &&
     thread.interactionMode === "plan" &&
-    isLatestTurnSettled(thread.latestTurn, thread.session) &&
+    isLatestTurnSettled(thread.latestTurn, thread.session, thread.advisor?.state ?? null) &&
     thread.hasActionableProposedPlan;
   if (hasPlanReadyPrompt) {
     return {

@@ -85,7 +85,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateAdvisorReview",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -115,7 +116,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateAdvisorReview";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -169,7 +171,9 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           resolveClaudeApiModelId(modelSelection),
           ...(cliEffort ? ["--effort", cliEffort] : []),
           ...(settingsJson ? ["--settings", settingsJson] : []),
-          "--dangerously-skip-permissions",
+          ...(operation === "generateAdvisorReview"
+            ? ["--tools", ""]
+            : ["--dangerously-skip-permissions"]),
         ],
         { env: claudeEnvironment },
       );
@@ -355,10 +359,22 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
+  const generateAdvisorReview: TextGeneration.TextGeneration["Service"]["generateAdvisorReview"] =
+    Effect.fn("ClaudeTextGeneration.generateAdvisorReview")(function* (input) {
+      return yield* runClaudeJson({
+        operation: "generateAdvisorReview",
+        cwd: input.cwd,
+        prompt: input.prompt,
+        outputSchemaJson: TextGeneration.AdvisorReviewGenerationOutput,
+        modelSelection: input.modelSelection,
+      });
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateAdvisorReview,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

@@ -23,6 +23,12 @@ interface PiModelLike {
   readonly name?: unknown;
 }
 
+interface PiCommandLike {
+  readonly name?: unknown;
+  readonly description?: unknown;
+  readonly source?: unknown;
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -70,12 +76,17 @@ async function inspectPi(settings: PiSettings, cwd: string, env: NodeJS.ProcessE
     const slashCommands: ServerProviderSlashCommand[] = [];
     if (Array.isArray(commandData?.commands)) {
       for (const entry of commandData.commands) {
-        const command = record(entry);
+        const command = record(entry) as PiCommandLike | undefined;
         if (!command || typeof command.name !== "string" || !command.name.trim()) continue;
         slashCommands.push({
           name: command.name.trim(),
           ...(typeof command.description === "string" && command.description.trim()
             ? { description: command.description.trim() }
+            : {}),
+          ...(command.source === "extension" ||
+          command.source === "prompt" ||
+          command.source === "skill"
+            ? { source: command.source }
             : {}),
         });
       }

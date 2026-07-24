@@ -156,6 +156,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        supportsAdvisorReview: true,
         snapshot,
         adapter,
         textGeneration,

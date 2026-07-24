@@ -4,6 +4,8 @@ import {
   ApprovalRequestId,
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
+  type OrchestrationAdvisorReview,
+  type ModelSelection,
   type OrchestrationThreadActivity,
   type OrchestrationProposedPlanId,
   ProviderDriverKind,
@@ -84,6 +86,9 @@ export interface WorkLogEntry {
   toolLifecycleStatus?: WorkLogToolLifecycleStatus;
   /** Originating orchestration activity kind (e.g. `user-input.requested`) for row chrome. */
   sourceActivityKind?: OrchestrationThreadActivity["kind"];
+  advisorReview?: OrchestrationAdvisorReview;
+  advisorModelSelection?: ModelSelection;
+  advisorStatus?: string;
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -296,13 +301,16 @@ export function formatElapsed(startIso: string, endIso: string | undefined): str
 
 type LatestTurnTiming = Pick<OrchestrationLatestTurn, "turnId" | "startedAt" | "completedAt">;
 type SessionActivityState = Pick<NonNullable<Thread["session"]>, "status" | "activeTurnId">;
+type AdvisorActivityState = Pick<NonNullable<Thread["advisor"]>["state"], "status">;
 
 export function isLatestTurnSettled(
   latestTurn: LatestTurnTiming | null,
   session: SessionActivityState | null,
+  advisor: AdvisorActivityState | null = null,
 ): boolean {
   if (!latestTurn?.startedAt) return false;
   if (!latestTurn.completedAt) return false;
+  if (advisor && advisor.status !== "approved" && advisor.status !== "stopped") return false;
   if (!session) return true;
   if (session.status === "running") return false;
   return true;
@@ -723,6 +731,13 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
           : activity.tone,
     activityKind: activity.kind,
   };
+  if (activity.kind === "advisor.review") {
+    const review = asRecord(payload?.review);
+    const modelSelection = asRecord(payload?.modelSelection);
+    if (review) entry.advisorReview = review as unknown as OrchestrationAdvisorReview;
+    if (modelSelection) entry.advisorModelSelection = modelSelection as unknown as ModelSelection;
+    if (typeof payload?.status === "string") entry.advisorStatus = payload.status;
+  }
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
   if (detail) {

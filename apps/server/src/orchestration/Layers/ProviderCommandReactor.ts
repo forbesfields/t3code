@@ -87,6 +87,12 @@ const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 const DEFAULT_THREAD_TITLE = "New thread";
+const ORCHESTRATED_WORKER_INSTRUCTIONS = [
+  "Orchestrated mode is enabled for this task.",
+  "After repository exploration and before implementation, call the authenticated advisor_consult MCP tool with stage `initial` and a concise checkpoint.",
+  "You may call advisor_consult once with stage `recovery` if you are stuck or materially change approach.",
+  "The server runs the final review automatically; do not claim completion until the orchestrator approves it.",
+].join(" ");
 
 export function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
@@ -606,6 +612,9 @@ const make = Effect.gen(function* () {
       threadModelSelections.set(input.threadId, input.modelSelection);
     }
     const normalizedInput = toNonEmptyProviderInput(input.messageText);
+    const providerInput = thread.advisor
+      ? [normalizedInput, ORCHESTRATED_WORKER_INSTRUCTIONS].filter(Boolean).join("\n\n")
+      : normalizedInput;
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()
@@ -637,7 +646,7 @@ const make = Effect.gen(function* () {
 
     return {
       threadId: input.threadId,
-      ...(normalizedInput ? { input: normalizedInput } : {}),
+      ...(providerInput ? { input: providerInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),

@@ -1,4 +1,5 @@
 import {
+  ActivityIcon,
   ArchiveIcon,
   ArrowUpDownIcon,
   BotIcon,
@@ -13,6 +14,7 @@ import {
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
+  UsersIcon,
 } from "lucide-react";
 import {
   ChangeRequestStatusIcon,
@@ -210,7 +212,11 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
-import { primaryServerConfigAtom, primaryServerKeybindingsAtom } from "../state/server";
+import {
+  primaryServerConfigAtom,
+  primaryServerKeybindingsAtom,
+  serverEnvironment,
+} from "../state/server";
 import {
   derivePhysicalProjectKey,
   deriveProjectGroupingOverrideKey,
@@ -2868,6 +2874,12 @@ function T3Wordmark() {
 const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+  const environmentId = usePrimaryEnvironmentId();
+  const getUsage = useAtomCommand(serverEnvironment.codingUsageGetReport, { reportFailure: false });
+  const [usage, setUsage] = useState<{
+    readonly totalTokens: number;
+    readonly totalCost: number;
+  } | null>(null);
   const handleSettingsClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -2880,6 +2892,24 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     }
     void navigate({ to: "/hermes" });
   }, [isMobile, navigate, setOpenMobile]);
+  const handleCodexAccountsClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/codex-accounts" });
+  }, [isMobile, navigate, setOpenMobile]);
+  const handleUsageClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void navigate({ to: "/usage" });
+  }, [isMobile, navigate, setOpenMobile]);
+  useEffect(() => {
+    if (environmentId === null) return;
+    void getUsage({ environmentId, input: {} }).then((result) => {
+      if (result._tag !== "Success") return;
+      const today = result.value.daily.at(-1);
+      if (today) setUsage({ totalTokens: today.totalTokens, totalCost: today.totalCost });
+    });
+  }, [environmentId, getUsage]);
 
   return (
     <SidebarFooter className="p-2">
@@ -2889,11 +2919,38 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
+            className="h-auto gap-2 px-2 py-2 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+            onClick={handleUsageClick}
+          >
+            <ActivityIcon className="size-3.5" />
+            <span className="grid text-left text-xs">
+              <span>Today</span>
+              {usage && (
+                <span className="text-[11px] text-muted-foreground">
+                  {(usage.totalTokens / 1_000_000).toFixed(1)}M · ${usage.totalCost.toFixed(2)}
+                </span>
+              )}
+            </span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
             className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
             onClick={handleHermesClick}
           >
             <BotIcon className="size-3.5" />
             <span className="text-xs">Hermes</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
+            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+            onClick={handleCodexAccountsClick}
+          >
+            <UsersIcon className="size-3.5" />
+            <span className="text-xs">Accounts</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>

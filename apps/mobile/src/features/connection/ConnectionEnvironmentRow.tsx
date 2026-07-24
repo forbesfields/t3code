@@ -1,5 +1,6 @@
 import { SymbolView } from "../../components/AppSymbol";
 import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import { preferredRemoteEnvironmentUrlHint } from "../../lib/remoteEnvironmentHints";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -43,6 +44,7 @@ export function ConnectionEnvironmentRow(props: {
   const statusLabel = connectionStatusLabel(props.environment);
   const statusTraceId = props.environment.connectionErrorTraceId;
   const hasConnectionFailure = props.environment.connectionError !== null;
+  const urlHint = preferredRemoteEnvironmentUrlHint(url);
   const isRetrying =
     props.environment.connectionState === "connecting" ||
     props.environment.connectionState === "reconnecting";
@@ -159,11 +161,14 @@ export function ConnectionEnvironmentRow(props: {
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
-                  placeholder="192.168.1.100:8080"
+                  placeholder="https://machine.tailnet.ts.net"
                   value={url}
                   onChangeText={setUrl}
                   className="rounded-[14px] border border-input-border bg-input px-4 py-3 text-base text-foreground"
                 />
+                {urlHint ? (
+                  <Text className="text-xs text-amber-700 dark:text-amber-300">{urlHint}</Text>
+                ) : null}
               </View>
             </>
           )}

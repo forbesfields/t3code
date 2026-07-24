@@ -114,6 +114,79 @@ export const ModelSelection = ModelSelectionSource.pipe(
 );
 export type ModelSelection = typeof ModelSelection.Type;
 
+export const OrchestrationAdvisorReviewStage = Schema.Literals(["initial", "recovery", "final"]);
+export type OrchestrationAdvisorReviewStage = typeof OrchestrationAdvisorReviewStage.Type;
+
+export const OrchestrationAdvisorVerdict = Schema.Literals([
+  "continue",
+  "ship",
+  "fix",
+  "need_human",
+]);
+export type OrchestrationAdvisorVerdict = typeof OrchestrationAdvisorVerdict.Type;
+
+export const OrchestrationAdvisorStatus = Schema.Literals([
+  "idle",
+  "reviewing",
+  "correcting",
+  "waiting_for_input",
+  "approved",
+  "stopped",
+]);
+export type OrchestrationAdvisorStatus = typeof OrchestrationAdvisorStatus.Type;
+
+export const OrchestrationAdvisorBlockerStatus = Schema.Literals(["open", "resolved", "waived"]);
+export type OrchestrationAdvisorBlockerStatus = typeof OrchestrationAdvisorBlockerStatus.Type;
+
+export const OrchestrationAdvisorBlocker = Schema.Struct({
+  id: EventId,
+  requirement: TrimmedNonEmptyString,
+  evidenceRequired: TrimmedNonEmptyString,
+  status: OrchestrationAdvisorBlockerStatus,
+});
+export type OrchestrationAdvisorBlocker = typeof OrchestrationAdvisorBlocker.Type;
+
+export const OrchestrationAdvisorReview = Schema.Struct({
+  id: EventId,
+  turnId: TurnId,
+  stage: OrchestrationAdvisorReviewStage,
+  verdict: OrchestrationAdvisorVerdict,
+  summary: TrimmedNonEmptyString,
+  instruction: Schema.optional(TrimmedNonEmptyString),
+  evidenceSummary: TrimmedNonEmptyString,
+  blockers: Schema.Array(OrchestrationAdvisorBlocker),
+  attempt: NonNegativeInt,
+  createdAt: IsoDateTime,
+  completedAt: IsoDateTime,
+});
+export type OrchestrationAdvisorReview = typeof OrchestrationAdvisorReview.Type;
+
+export const OrchestrationAdvisorConfig = Schema.Struct({
+  modelSelection: ModelSelection,
+  maxCorrectionAttempts: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(2))),
+});
+export type OrchestrationAdvisorConfig = typeof OrchestrationAdvisorConfig.Type;
+
+export const OrchestrationAdvisorState = Schema.Struct({
+  status: OrchestrationAdvisorStatus,
+  correctionAttempts: NonNegativeInt,
+  activeTurnId: Schema.NullOr(TurnId),
+  blockers: Schema.Array(OrchestrationAdvisorBlocker),
+  lastReview: Schema.NullOr(OrchestrationAdvisorReview),
+  error: Schema.NullOr(TrimmedNonEmptyString),
+  updatedAt: IsoDateTime,
+});
+export type OrchestrationAdvisorState = typeof OrchestrationAdvisorState.Type;
+
+export const OrchestrationAdvisor = Schema.Struct({
+  config: OrchestrationAdvisorConfig,
+  state: OrchestrationAdvisorState,
+});
+export type OrchestrationAdvisor = typeof OrchestrationAdvisor.Type;
+
+export const OrchestrationAdvisorAction = Schema.Literals(["retry", "bypass", "stop"]);
+export type OrchestrationAdvisorAction = typeof OrchestrationAdvisorAction.Type;
+
 export const RuntimeMode = Schema.Literals([
   "approval-required",
   "auto-accept-edits",
@@ -346,6 +419,7 @@ export const OrchestrationThread = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  advisor: Schema.optional(Schema.NullOr(OrchestrationAdvisor)),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
@@ -392,6 +466,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  advisor: Schema.optional(Schema.NullOr(OrchestrationAdvisor)),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
@@ -531,6 +606,7 @@ const ThreadCreateCommand = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  advisorConfig: Schema.optional(Schema.NullOr(OrchestrationAdvisorConfig)),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
@@ -564,6 +640,7 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   threadId: ThreadId,
   title: Schema.optional(TrimmedNonEmptyString),
   modelSelection: Schema.optional(ModelSelection),
+  advisorConfig: Schema.optional(Schema.NullOr(OrchestrationAdvisorConfig)),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -589,6 +666,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  advisorConfig: Schema.optional(Schema.NullOr(OrchestrationAdvisorConfig)),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
@@ -692,6 +770,14 @@ const ThreadSessionStopCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadAdvisorRespondCommand = Schema.Struct({
+  type: Schema.Literal("thread.advisor.respond"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  action: OrchestrationAdvisorAction,
+  createdAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
@@ -709,6 +795,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  ThreadAdvisorRespondCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -730,6 +817,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  ThreadAdvisorRespondCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -790,6 +878,14 @@ const ThreadActivityAppendCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadAdvisorStateSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.advisor-state.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  state: OrchestrationAdvisorState,
+  createdAt: IsoDateTime,
+});
+
 const ThreadRevertCompleteCommand = Schema.Struct({
   type: Schema.Literal("thread.revert.complete"),
   commandId: CommandId,
@@ -805,6 +901,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
+  ThreadAdvisorStateSetCommand,
   ThreadRevertCompleteCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
@@ -838,6 +935,8 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
   "thread.activity-appended",
+  "thread.advisor-state-set",
+  "thread.advisor-response-requested",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
@@ -876,6 +975,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  advisor: Schema.optional(Schema.NullOr(OrchestrationAdvisor)),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
@@ -906,6 +1006,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   threadId: ThreadId,
   title: Schema.optional(TrimmedNonEmptyString),
   modelSelection: Schema.optional(ModelSelection),
+  advisor: Schema.optional(Schema.NullOr(OrchestrationAdvisor)),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   updatedAt: IsoDateTime,
@@ -1010,6 +1111,18 @@ export const ThreadTurnDiffCompletedPayload = Schema.Struct({
 export const ThreadActivityAppendedPayload = Schema.Struct({
   threadId: ThreadId,
   activity: OrchestrationThreadActivity,
+});
+
+export const ThreadAdvisorStateSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  state: OrchestrationAdvisorState,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadAdvisorResponseRequestedPayload = Schema.Struct({
+  threadId: ThreadId,
+  action: OrchestrationAdvisorAction,
+  createdAt: IsoDateTime,
 });
 
 export const OrchestrationEventMetadata = Schema.Struct({
@@ -1143,6 +1256,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.activity-appended"),
     payload: ThreadActivityAppendedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.advisor-state-set"),
+    payload: ThreadAdvisorStateSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.advisor-response-requested"),
+    payload: ThreadAdvisorResponseRequestedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

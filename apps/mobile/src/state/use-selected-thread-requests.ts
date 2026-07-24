@@ -62,6 +62,10 @@ export function useSelectedThreadRequests() {
     threadEnvironment.respondToUserInput,
     "thread user input response",
   );
+  const respondToAdvisor = useAtomCommand(
+    threadEnvironment.respondToAdvisor,
+    "thread advisor response",
+  );
   const { selectedThread: selectedThreadShell } = useThreadSelection();
   const selectedThread = useSelectedThreadDetail();
   const userInputDraftsByRequestKey = useAtomValue(userInputDraftsByRequestKeyAtom);
@@ -69,12 +73,14 @@ export function useSelectedThreadRequests() {
   const [respondingUserInputId, setRespondingUserInputId] = useState<ApprovalRequestId | null>(
     null,
   );
+  const [respondingAdvisorAction, setRespondingAdvisorAction] = useState(false);
 
   const activePendingApprovals = useMemo(
     () => (selectedThread ? derivePendingApprovals(selectedThread.activities) : []),
     [selectedThread],
   );
-  const activePendingApproval = activePendingApprovals[0] ?? null;
+  const activePendingApproval =
+    activePendingApprovals.find((approval) => !approval.stale) ?? activePendingApprovals[0] ?? null;
   const activePendingUserInputs = useMemo(
     () => (selectedThread ? derivePendingUserInputs(selectedThread.activities) : []),
     [selectedThread],
@@ -161,13 +167,33 @@ export function useSelectedThreadRequests() {
   ]);
 
   return {
+    activePendingApprovals,
     activePendingApproval,
     activePendingUserInput,
     activePendingUserInputDrafts,
     activePendingUserInputAnswers,
     respondingApprovalId,
     respondingUserInputId,
+    respondingAdvisorAction,
     onRespondToApproval,
+    onRespondToAdvisor: useCallback(
+      async (action: "retry" | "bypass" | "stop") => {
+        if (!selectedThreadShell) {
+          return;
+        }
+        setRespondingAdvisorAction(true);
+        const result = await respondToAdvisor({
+          environmentId: selectedThreadShell.environmentId,
+          input: {
+            threadId: selectedThreadShell.id,
+            action,
+          },
+        });
+        setRespondingAdvisorAction(false);
+        return result;
+      },
+      [respondToAdvisor, selectedThreadShell],
+    ),
     onSelectUserInputOption,
     onChangeUserInputCustomAnswer,
     onSubmitUserInput,

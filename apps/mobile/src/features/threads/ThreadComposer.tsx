@@ -94,6 +94,7 @@ export interface ThreadComposerProps {
   readonly selectedThread: OrchestrationThreadShell;
   readonly serverConfig: T3ServerConfig | null;
   readonly queueCount: number;
+  readonly outboxDeliveryError?: string | null;
   readonly activeThreadBusy: boolean;
   readonly environmentId: EnvironmentId;
   readonly projectCwd: string | null;
@@ -902,6 +903,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               {props.queueCount} queued message{props.queueCount === 1 ? "" : "s"} will send
               automatically.
             </Text>
+            {props.outboxDeliveryError ? (
+              <Text className="pt-1 text-xs text-amber-700 dark:text-amber-300">
+                {props.outboxDeliveryError}
+              </Text>
+            ) : null}
           </Animated.View>
         ) : null}
       </Animated.View>

@@ -1,6 +1,8 @@
 import { ApprovalRequestId, isToolLifecycleItemType } from "@t3tools/contracts";
 import type {
+  OrchestrationAdvisorReview,
   OrchestrationLatestTurn,
+  OrchestrationProposedPlan,
   OrchestrationThread,
   OrchestrationThreadActivity,
   ToolLifecycleItemType,
@@ -17,6 +19,9 @@ export interface PendingApproval {
   readonly requestKind: "command" | "file-read" | "file-change";
   readonly createdAt: string;
   readonly detail?: string;
+  readonly command?: string;
+  readonly changedFiles?: ReadonlyArray<string>;
+  readonly stale?: boolean;
 }
 
 export interface PendingUserInput {
@@ -53,6 +58,9 @@ export interface ThreadFeedActivity {
     | "zap";
   readonly toolLike: boolean;
   readonly status: "success" | "failure" | "neutral" | null;
+  readonly advisorReview?: OrchestrationAdvisorReview;
+  readonly advisorStatus?: string;
+  readonly advisorModel?: string;
 }
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 1;
@@ -74,6 +82,9 @@ interface WorkLogEntry {
   requestKind?: PendingApproval["requestKind"];
   toolLifecycleStatus?: WorkLogToolLifecycleStatus;
   toolData?: unknown;
+  advisorReview?: OrchestrationAdvisorReview;
+  advisorStatus?: string;
+  advisorModel?: string;
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -94,10 +105,18 @@ type RawThreadFeedEntry =
       readonly createdAt: string;
       readonly turnId: TurnId | null;
       readonly activity: ThreadFeedActivity;
+    }
+  | {
+      readonly type: "proposed-plan";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly turnId: TurnId | null;
+      readonly proposedPlan: OrchestrationProposedPlan;
     };
 
 export type ThreadFeedEntry =
   | Extract<RawThreadFeedEntry, { type: "message" }>
+  | Extract<RawThreadFeedEntry, { type: "proposed-plan" }>
   | {
       readonly type: "activity-group";
       readonly id: string;
@@ -257,6 +276,28 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
   return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function parseAdvisorReview(payload: Record<string, unknown> | null): {
+  review: OrchestrationAdvisorReview | null;
+  status: string | undefined;
+  model: string | undefined;
+} {
+  const reviewRecord = asRecord(payload?.review);
+  const modelSelection = asRecord(payload?.modelSelection);
+  const status = typeof payload?.status === "string" ? payload.status : undefined;
+  if (!reviewRecord) {
+    return { review: null, status, model: undefined };
+  }
+  return {
+    review: reviewRecord as unknown as OrchestrationAdvisorReview,
+    status,
+    model: typeof modelSelection?.model === "string" ? modelSelection.model : undefined,
+  };
+}
+
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const payload =
     activity.payload && typeof activity.payload === "object"
@@ -291,6 +332,18 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
           : activity.tone,
     activityKind: activity.kind,
   };
+  if (activity.kind === "advisor.review") {
+    const advisor = parseAdvisorReview(payload);
+    if (advisor.review) {
+      entry.advisorReview = advisor.review;
+    }
+    if (advisor.status) {
+      entry.advisorStatus = advisor.status;
+    }
+    if (advisor.model) {
+      entry.advisorModel = advisor.model;
+    }
+  }
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
   if (
@@ -575,10 +628,6 @@ function workEntryHeading(workEntry: WorkLogEntry): string {
     return capitalizePhrase(normalizeCompactToolLabel(workEntry.label));
   }
   return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
 function asTrimmedString(value: unknown): string | null {
@@ -1210,11 +1259,15 @@ export function derivePendingApprovals(
     const detail = typeof payload?.detail === "string" ? payload.detail : undefined;
 
     if (activity.kind === "approval.requested" && requestId && requestKind) {
+      const commandPreview = extractToolCommand(payload);
+      const changedFiles = extractChangedFiles(payload);
       openByRequestId.set(requestId, {
         requestId,
         requestKind,
         createdAt: activity.createdAt,
         ...(detail ? { detail } : {}),
+        ...(commandPreview.command ? { command: commandPreview.command } : {}),
+        ...(changedFiles.length > 0 ? { changedFiles } : {}),
       });
       continue;
     }
@@ -1229,7 +1282,12 @@ export function derivePendingApprovals(
       requestId &&
       isStalePendingRequestFailureDetail(detail)
     ) {
-      openByRequestId.delete(requestId);
+      const existing = openByRequestId.get(requestId);
+      if (existing) {
+        openByRequestId.set(requestId, { ...existing, stale: true });
+      } else {
+        openByRequestId.delete(requestId);
+      }
     }
   }
 
@@ -1309,6 +1367,17 @@ export function buildPendingUserInputAnswers(
   return answers;
 }
 
+export function pendingApprovalTitle(requestKind: PendingApproval["requestKind"]): string {
+  switch (requestKind) {
+    case "command":
+      return "Run command";
+    case "file-read":
+      return "Read file";
+    case "file-change":
+      return "Change file";
+  }
+}
+
 export function buildThreadFeed(
   thread: OrchestrationThread,
   options?: {
@@ -1326,6 +1395,13 @@ export function buildThreadFeed(
         id: message.id,
         createdAt: message.createdAt,
         message,
+      })),
+      ...thread.proposedPlans.map<RawThreadFeedEntry>((proposedPlan) => ({
+        type: "proposed-plan",
+        id: `proposed-plan:${proposedPlan.id}`,
+        createdAt: proposedPlan.createdAt,
+        turnId: proposedPlan.turnId,
+        proposedPlan,
       })),
       ...workLogEntries
         .filter((entry) => {
@@ -1360,6 +1436,9 @@ export function buildThreadFeed(
                 .join("\n"),
               toolLike: workLogEntryIsToolLike(entry),
               status: workEntryStatus(entry),
+              ...(entry.advisorReview ? { advisorReview: entry.advisorReview } : {}),
+              ...(entry.advisorStatus ? { advisorStatus: entry.advisorStatus } : {}),
+              ...(entry.advisorModel ? { advisorModel: entry.advisorModel } : {}),
             },
           };
         }),

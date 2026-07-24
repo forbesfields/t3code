@@ -16,6 +16,7 @@ import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -34,6 +35,7 @@ import { ProjectionCheckpointRepository } from "../src/persistence/Services/Proj
 import { ProjectionPendingApprovalRepository } from "../src/persistence/Services/ProjectionPendingApprovals.ts";
 import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
+import { ProviderInstanceRegistry } from "../src/provider/Services/ProviderInstanceRegistry.ts";
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
@@ -46,6 +48,7 @@ import {
 import { ProviderService } from "../src/provider/Services/ProviderService.ts";
 import { AnalyticsService } from "../src/telemetry/Services/AnalyticsService.ts";
 import { CheckpointReactorLive } from "../src/orchestration/Layers/CheckpointReactor.ts";
+import { AdvisorReviewReactorLive } from "../src/orchestration/Layers/AdvisorReviewReactor.ts";
 import * as RepositoryIdentityResolver from "../src/project/RepositoryIdentityResolver.ts";
 import { OrchestrationEngineLive } from "../src/orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "../src/orchestration/Layers/ProjectionPipeline.ts";
@@ -59,6 +62,7 @@ import {
   type OrchestrationEngineShape,
 } from "../src/orchestration/Services/OrchestrationEngine.ts";
 import { ThreadDeletionReactor } from "../src/orchestration/Services/ThreadDeletionReactor.ts";
+import { AdvisorReviewReactor } from "../src/orchestration/Services/AdvisorReviewReactor.ts";
 import { OrchestrationReactor } from "../src/orchestration/Services/OrchestrationReactor.ts";
 import { ProjectionSnapshotQuery } from "../src/orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -182,6 +186,7 @@ export interface OrchestrationIntegrationHarness {
   readonly checkpointStore: CheckpointStore.CheckpointStore["Service"];
   readonly checkpointRepository: ProjectionCheckpointRepository["Service"];
   readonly pendingApprovalRepository: ProjectionPendingApprovalRepository["Service"];
+  readonly advisorReview: AdvisorReviewReactor["Service"];
   readonly waitForThread: (
     threadId: string,
     predicate: (thread: OrchestrationThread) => boolean,
@@ -223,6 +228,9 @@ export interface OrchestrationIntegrationHarness {
 interface MakeOrchestrationIntegrationHarnessOptions {
   readonly provider?: ProviderDriverKind;
   readonly realCodex?: boolean;
+  readonly advisorReviewOutputs?: ReadonlyArray<
+    import("../src/textGeneration/TextGeneration.ts").AdvisorReviewGenerationOutput
+  >;
 }
 
 export const makeOrchestrationIntegrationHarness = (
@@ -318,10 +326,29 @@ export const makeOrchestrationIntegrationHarness = (
         readonly newBranch: string;
       }) => Effect.succeed({ branch: input.newBranch }),
     });
+    const advisorReviewOutputs = [...(options?.advisorReviewOutputs ?? [])];
     const textGenerationLayer = Layer.succeed(TextGeneration, {
       generateBranchName: () => Effect.succeed({ branch: "update" }),
       generateThreadTitle: () => Effect.succeed({ title: "New thread" }),
+      generateAdvisorReview: () =>
+        Effect.sync(() => advisorReviewOutputs.shift()).pipe(
+          Effect.flatMap((output) =>
+            output === undefined
+              ? Effect.die("No deterministic advisor review output remains")
+              : Effect.succeed(output),
+          ),
+        ),
     } as unknown as TextGenerationShape);
+    const providerInstanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry, {
+      getInstance: () =>
+        Effect.succeed({
+          supportsAdvisorReview: true,
+        } as never),
+      listInstances: Effect.succeed([]),
+      listUnavailable: Effect.succeed([]),
+      streamChanges: Stream.empty,
+      subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
+    });
     const providerCommandReactorLayer = ProviderCommandReactorLive.pipe(
       Layer.provideMerge(runtimeServicesLayer),
       Layer.provideMerge(gitWorkflowLayer),
@@ -356,6 +383,19 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provideMerge(WorkspacePaths.layer),
       Layer.provideMerge(VcsProcess.layer),
     );
+    const advisorReviewLayer =
+      options?.advisorReviewOutputs !== undefined
+        ? AdvisorReviewReactorLive.pipe(
+            Layer.provideMerge(runtimeServicesLayer),
+            Layer.provideMerge(textGenerationLayer),
+            Layer.provideMerge(providerInstanceRegistryLayer),
+            Layer.provideMerge(VcsProcess.layer),
+          )
+        : Layer.succeed(AdvisorReviewReactor, {
+            consult: () => Effect.die("advisor consult is not used by the base harness"),
+            start: () => Effect.void,
+            drain: Effect.void,
+          });
     const orchestrationReactorLayer = OrchestrationReactorLive.pipe(
       Layer.provideMerge(runtimeIngestionLayer),
       Layer.provideMerge(providerCommandReactorLayer),
@@ -366,6 +406,7 @@ export const makeOrchestrationIntegrationHarness = (
           drain: Effect.void,
         }),
       ),
+      Layer.provideMerge(advisorReviewLayer),
       Layer.provideMerge(
         Layer.succeed(AgentAwarenessRelay.AgentAwarenessRelay, {
           publishThread: () => Effect.void,
@@ -396,6 +437,9 @@ export const makeOrchestrationIntegrationHarness = (
     ).pipe(Effect.orDie);
     const providerService = yield* tryRuntimePromise("load ProviderService service", () =>
       runtime.runPromise(Effect.service(ProviderService)),
+    ).pipe(Effect.orDie);
+    const advisorReview = yield* tryRuntimePromise("load AdvisorReviewReactor service", () =>
+      runtime.runPromise(Effect.service(AdvisorReviewReactor)),
     ).pipe(Effect.orDie);
     const checkpointStore = yield* tryRuntimePromise("load CheckpointStore service", () =>
       runtime.runPromise(Effect.service(CheckpointStore.CheckpointStore)),
@@ -551,6 +595,7 @@ export const makeOrchestrationIntegrationHarness = (
       checkpointStore,
       checkpointRepository,
       pendingApprovalRepository,
+      advisorReview,
       waitForThread,
       waitForDomainEvent,
       waitForPendingApproval,
