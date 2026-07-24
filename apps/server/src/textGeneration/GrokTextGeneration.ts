@@ -52,7 +52,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateAdvisorReview";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -82,6 +83,11 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       });
 
       const promptResult = yield* Effect.gen(function* () {
+        if (operation === "generateAdvisorReview") {
+          yield* runtime.handleRequestPermission(() =>
+            Effect.succeed({ outcome: { outcome: "cancelled" as const } }),
+          );
+        }
         const started = yield* runtime.start();
         yield* applyGrokAcpModelSelection({
           runtime,
@@ -247,10 +253,22 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateAdvisorReview: TextGeneration.TextGeneration["Service"]["generateAdvisorReview"] =
+    Effect.fn("GrokTextGeneration.generateAdvisorReview")(function* (input) {
+      return yield* runGrokJson({
+        operation: "generateAdvisorReview",
+        cwd: input.cwd,
+        prompt: input.prompt,
+        outputSchemaJson: TextGeneration.AdvisorReviewGenerationOutput,
+        modelSelection: input.modelSelection,
+      });
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateAdvisorReview,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

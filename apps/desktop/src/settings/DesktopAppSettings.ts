@@ -25,6 +25,7 @@ export interface DesktopSettings {
   readonly serverExposureMode: DesktopServerExposureMode;
   readonly tailscaleServeEnabled: boolean;
   readonly tailscaleServePort: number;
+  readonly tailscaleDiscoveryEnabled: boolean;
   readonly updateChannel: DesktopUpdateChannel;
   readonly updateChannelConfiguredByUser: boolean;
   // Was a "local" | "wsl" swap mode in an earlier iteration of the WSL
@@ -72,6 +73,7 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   serverExposureMode: "local-only",
   tailscaleServeEnabled: false,
   tailscaleServePort: DEFAULT_TAILSCALE_SERVE_PORT,
+  tailscaleDiscoveryEnabled: false,
   updateChannel: "latest",
   updateChannelConfiguredByUser: false,
   wslBackendEnabled: false,
@@ -92,6 +94,7 @@ const DesktopSettingsDocument = Schema.Struct({
   serverExposureMode: Schema.optionalKey(DesktopServerExposureModeSchema),
   tailscaleServeEnabled: Schema.optionalKey(Schema.Boolean),
   tailscaleServePort: Schema.optionalKey(Schema.Number),
+  tailscaleDiscoveryEnabled: Schema.optionalKey(Schema.Boolean),
   updateChannel: Schema.optionalKey(DesktopUpdateChannelSchema),
   updateChannelConfiguredByUser: Schema.optionalKey(Schema.Boolean),
   // Newer form of the WSL toggle. `wslMode` is still accepted on load so
@@ -155,6 +158,9 @@ export class DesktopAppSettings extends Context.Service<
       readonly enabled: boolean;
       readonly port: Option.Option<number>;
     }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
+    readonly setTailscaleDiscoveryEnabled: (
+      enabled: boolean,
+    ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setUpdateChannel: (
       channel: DesktopUpdateChannel,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
@@ -222,6 +228,8 @@ function normalizeDesktopSettingsDocument(
       parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
     tailscaleServeEnabled: parsed.tailscaleServeEnabled === true,
     tailscaleServePort: normalizeTailscaleServePort(parsed.tailscaleServePort),
+    tailscaleDiscoveryEnabled:
+      parsed.tailscaleDiscoveryEnabled === true || parsed.tailscaleServeEnabled === true,
     updateChannel: updateChannelConfiguredByUser
       ? Option.getOrElse(parsedUpdateChannel, () => defaultSettings.updateChannel)
       : defaultSettings.updateChannel,
@@ -252,6 +260,9 @@ function toDesktopSettingsDocument(
   }
   if (settings.tailscaleServePort !== defaults.tailscaleServePort) {
     document.tailscaleServePort = settings.tailscaleServePort;
+  }
+  if (settings.tailscaleDiscoveryEnabled !== defaults.tailscaleDiscoveryEnabled) {
+    document.tailscaleDiscoveryEnabled = settings.tailscaleDiscoveryEnabled;
   }
   if (settings.updateChannel !== defaults.updateChannel) {
     document.updateChannel = settings.updateChannel;
@@ -308,12 +319,28 @@ function setTailscaleServe(
     onNone: () => settings.tailscaleServePort,
     onSome: normalizeTailscaleServePort,
   });
-  return settings.tailscaleServeEnabled === input.enabled && settings.tailscaleServePort === port
+  const nextEnabled = input.enabled;
+  if (
+    settings.tailscaleServeEnabled === nextEnabled &&
+    settings.tailscaleServePort === port &&
+    (!nextEnabled || settings.tailscaleDiscoveryEnabled)
+  ) {
+    return settings;
+  }
+  return {
+    ...settings,
+    tailscaleServeEnabled: nextEnabled,
+    tailscaleServePort: port,
+    tailscaleDiscoveryEnabled: nextEnabled ? true : settings.tailscaleDiscoveryEnabled,
+  };
+}
+
+function setTailscaleDiscoveryEnabled(settings: DesktopSettings, enabled: boolean): DesktopSettings {
+  return settings.tailscaleDiscoveryEnabled === enabled
     ? settings
     : {
         ...settings,
-        tailscaleServeEnabled: input.enabled,
-        tailscaleServePort: port,
+        tailscaleDiscoveryEnabled: enabled,
       };
 }
 
@@ -514,6 +541,10 @@ export const make = Effect.gen(function* () {
       persist((settings) => setTailscaleServe(settings, input)).pipe(
         Effect.withSpan("desktop.settings.setTailscaleServe", { attributes: input }),
       ),
+    setTailscaleDiscoveryEnabled: (enabled) =>
+      persist((settings) => setTailscaleDiscoveryEnabled(settings, enabled)).pipe(
+        Effect.withSpan("desktop.settings.setTailscaleDiscoveryEnabled", { attributes: { enabled } }),
+      ),
     setUpdateChannel: (channel) =>
       persist((settings) => setUpdateChannel(settings, channel)).pipe(
         Effect.withSpan("desktop.settings.setUpdateChannel", { attributes: { channel } }),
@@ -568,6 +599,8 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
         setServerExposureMode: (mode) =>
           update((settings) => setServerExposureMode(settings, mode)),
         setTailscaleServe: (input) => update((settings) => setTailscaleServe(settings, input)),
+        setTailscaleDiscoveryEnabled: (enabled) =>
+          update((settings) => setTailscaleDiscoveryEnabled(settings, enabled)),
         setUpdateChannel: (channel) => update((settings) => setUpdateChannel(settings, channel)),
         setWslBackendEnabled: (enabled) =>
           update((settings) => setWslBackendEnabled(settings, enabled)),

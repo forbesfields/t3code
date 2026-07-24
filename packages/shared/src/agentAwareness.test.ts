@@ -24,6 +24,7 @@ function thread(
   | "id"
   | "title"
   | "modelSelection"
+  | "advisor"
   | "session"
   | "latestTurn"
   | "updatedAt"
@@ -34,6 +35,7 @@ function thread(
     id: "thread-1" as ThreadId,
     title: "Fix failing CI",
     modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+    advisor: undefined,
     session: null,
     latestTurn: null,
     updatedAt: NOW,
@@ -41,6 +43,24 @@ function thread(
     hasPendingUserInput: false,
     ...overrides,
   };
+}
+
+function advisor(status: "idle" | "reviewing" | "waiting_for_input" | "approved") {
+  return {
+    config: {
+      modelSelection: { instanceId: ProviderInstanceId.make("claude_review"), model: "opus" },
+      maxCorrectionAttempts: 2,
+    },
+    state: {
+      status,
+      correctionAttempts: 0,
+      activeTurnId: "turn-1" as TurnId,
+      blockers: [],
+      lastReview: null,
+      error: null,
+      updatedAt: NOW,
+    },
+  } as const;
 }
 
 describe("projectThreadAwareness", () => {
@@ -100,6 +120,28 @@ describe("projectThreadAwareness", () => {
       modelTitle: "gpt-5.4",
       deepLink: "/threads/env-1/thread-1",
     });
+  });
+
+  it("keeps orchestrated work running until final approval and projects pauses as input", () => {
+    const latestTurn = {
+      turnId: "turn-1" as TurnId,
+      state: "completed" as const,
+      requestedAt: NOW,
+      startedAt: NOW,
+      completedAt: NOW,
+      assistantMessageId: null,
+    };
+    const projectStatus = (status: "idle" | "reviewing" | "waiting_for_input" | "approved") =>
+      projectThreadAwareness({
+        environmentId: "env-1" as EnvironmentId,
+        project,
+        thread: thread({ latestTurn, advisor: advisor(status) }),
+      })?.phase;
+
+    expect(projectStatus("idle")).toBe("running");
+    expect(projectStatus("reviewing")).toBe("running");
+    expect(projectStatus("waiting_for_input")).toBe("waiting_for_input");
+    expect(projectStatus("approved")).toBe("completed");
   });
 
   it("projects completed turns as completed even when teardown settled them as interrupted", () => {

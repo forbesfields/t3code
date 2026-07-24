@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   CopyIcon,
   DownloadIcon,
+  FileJsonIcon,
   LoaderIcon,
   PlusIcon,
   Trash2Icon,
@@ -381,6 +382,8 @@ interface ProviderInstanceCardProps {
   readonly onModelOrderChange: (next: ReadonlyArray<string>) => void;
   readonly onRunUpdate?: (() => void) | undefined;
   readonly isUpdating?: boolean | undefined;
+  readonly mcpConfigPath?: string | undefined;
+  readonly onOpenMcpConfig?: (() => void) | undefined;
 }
 
 /**
@@ -425,6 +428,8 @@ export function ProviderInstanceCard({
   onModelOrderChange,
   onRunUpdate,
   isUpdating = false,
+  mcpConfigPath,
+  onOpenMcpConfig,
 }: ProviderInstanceCardProps) {
   const enabled = instance.enabled ?? true;
   // The server-reported status wins when present; otherwise fall back to
@@ -805,6 +810,28 @@ export function ProviderInstanceCard({
                 variant="card"
                 onChange={updateConfig}
               />
+            ) : null}
+
+            {mcpConfigPath && onOpenMcpConfig ? (
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <span className="text-xs font-medium text-foreground">MCP servers</span>
+                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                    T3 loads Pi&apos;s configured servers in new Pi chats.
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+                  onClick={onOpenMcpConfig}
+                  title={mcpConfigPath}
+                >
+                  <FileJsonIcon className="size-3.5" />
+                  Edit mcp.json
+                </Button>
+              </div>
             ) : null}
 
             {driverOption !== undefined ? (

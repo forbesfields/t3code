@@ -8,7 +8,22 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildProviderInstanceUpdatePatch,
   formatDiagnosticsDescription,
+  resolvePiMcpConfigPath,
 } from "./SettingsPanels.logic";
+
+describe("resolvePiMcpConfigPath", () => {
+  it("uses the instance agent directory and falls back to Pi settings", () => {
+    expect(
+      resolvePiMcpConfigPath(
+        { agentDir: "/Users/example/.pi-work/agent/" },
+        "/Users/example/.pi/agent",
+      ),
+    ).toBe("/Users/example/.pi-work/agent/mcp.json");
+    expect(resolvePiMcpConfigPath({}, "/Users/example/.pi/agent")).toBe(
+      "/Users/example/.pi/agent/mcp.json",
+    );
+  });
+});
 
 describe("formatDiagnosticsDescription", () => {
   it("collapses trace and metric URLs that share the same OTEL base path", () => {

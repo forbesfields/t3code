@@ -15,6 +15,7 @@ import {
   ProviderDriverKind,
   ThreadId,
   ModelSelection,
+  type OrchestrationAdvisorConfig,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
@@ -106,6 +107,57 @@ function withHarness<A, E>(
   ).pipe(Effect.provide(NodeServices.layer));
 }
 
+function withOrchestratedHarness<A, E>(
+  use: (harness: OrchestrationIntegrationHarness) => Effect.Effect<A, E>,
+) {
+  return Effect.acquireUseRelease(
+    makeOrchestrationIntegrationHarness({
+      provider: CODEX_PROVIDER,
+      advisorReviewOutputs: [
+        {
+          verdict: "continue",
+          summary: "The initial approach is sound.",
+          evidenceSummary: "The worker supplied an initial checkpoint.",
+          blockers: [],
+        },
+        {
+          verdict: "fix",
+          summary: "One correctness blocker remains.",
+          instruction: "Correct the implementation and provide the requested evidence.",
+          evidenceSummary: "The first worker result does not prove the requested behavior.",
+          blockers: [
+            {
+              requirement: "Prove the requested behavior is correct.",
+              evidenceRequired: "A deterministic passing verification result.",
+              status: "open",
+            },
+          ],
+        },
+        {
+          verdict: "continue",
+          summary: "The correction approach addresses the blocker.",
+          evidenceSummary: "The worker supplied the required correction checkpoint.",
+          blockers: [],
+        },
+        {
+          verdict: "ship",
+          summary: "The blocker is resolved and the task may complete.",
+          evidenceSummary: "The corrective turn and deterministic verification are present.",
+          blockers: [
+            {
+              requirement: "Prove the requested behavior is correct.",
+              evidenceRequired: "A deterministic passing verification result.",
+              status: "resolved",
+            },
+          ],
+        },
+      ],
+    }),
+    use,
+    (harness) => harness.dispose,
+  ).pipe(Effect.provide(NodeServices.layer));
+}
+
 function withRealCodexHarness<A, E>(
   use: (harness: OrchestrationIntegrationHarness) => Effect.Effect<A, E>,
 ) {
@@ -116,7 +168,10 @@ function withRealCodexHarness<A, E>(
   ).pipe(Effect.provide(NodeServices.layer));
 }
 
-const seedProjectAndThread = (harness: OrchestrationIntegrationHarness) =>
+const seedProjectAndThread = (
+  harness: OrchestrationIntegrationHarness,
+  advisorConfig?: OrchestrationAdvisorConfig,
+) =>
   Effect.gen(function* () {
     const createdAt = nowIso();
     const provider = harness.adapterHarness?.provider ?? CODEX_PROVIDER;
@@ -146,6 +201,7 @@ const seedProjectAndThread = (harness: OrchestrationIntegrationHarness) =>
         instanceId,
         model: defaultModel,
       },
+      ...(advisorConfig ? { advisorConfig } : {}),
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       runtimeMode: "approval-required",
       branch: null,
@@ -262,6 +318,111 @@ it.live("runs a single turn end-to-end and persists checkpoint state in sqlite +
       assert.equal(gitRefExists(harness.workspaceDir, ref1), true);
       assert.equal(gitShowFileAtRef(harness.workspaceDir, ref0, "README.md"), "v1\n");
       assert.equal(gitShowFileAtRef(harness.workspaceDir, ref1, "README.md"), "v1\n");
+    }),
+  ),
+);
+
+it.live("keeps an orchestrated task open until a corrective turn receives final approval", () =>
+  withOrchestratedHarness((harness) =>
+    Effect.gen(function* () {
+      const instanceId = defaultInstanceIdForDriver(CODEX_PROVIDER);
+      yield* seedProjectAndThread(harness, {
+        modelSelection: {
+          instanceId,
+          model: DEFAULT_MODEL_BY_PROVIDER[CODEX_PROVIDER] ?? DEFAULT_MODEL,
+        },
+        maxCorrectionAttempts: 2,
+      });
+
+      const workerResponse = (suffix: string, text: string): TestTurnResponse => ({
+        events: [
+          {
+            type: "turn.started",
+            ...runtimeBase(`evt-advisor-${suffix}-1`, "2026-02-24T11:00:00.000Z"),
+            threadId: THREAD_ID,
+            turnId: `${FIXTURE_TURN_ID}-${suffix}`,
+          },
+          {
+            type: "message.delta",
+            ...runtimeBase(`evt-advisor-${suffix}-2`, "2026-02-24T11:00:00.100Z"),
+            threadId: THREAD_ID,
+            turnId: `${FIXTURE_TURN_ID}-${suffix}`,
+            delta: text,
+          },
+          {
+            type: "turn.completed",
+            ...runtimeBase(`evt-advisor-${suffix}-3`, "2026-02-24T11:00:00.200Z"),
+            threadId: THREAD_ID,
+            turnId: `${FIXTURE_TURN_ID}-${suffix}`,
+            status: "completed",
+          },
+        ],
+        mutateWorkspace: () => Effect.sleep("300 millis"),
+      });
+
+      yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+        workerResponse("initial", "Initial worker result.\n"),
+      );
+      yield* harness.adapterHarness!.queueTurnResponseForNextSession(
+        workerResponse("correction", "Corrective worker result.\n"),
+      );
+      yield* startTurn({
+        harness,
+        commandId: "cmd-turn-start-advisor",
+        messageId: "msg-user-advisor",
+        text: "Complete the task with orchestrator approval",
+      });
+
+      const firstTurn = yield* harness.waitForThread(
+        THREAD_ID,
+        (thread) => thread.latestTurn?.state === "running",
+      );
+      yield* harness.advisorReview.consult({
+        threadId: THREAD_ID,
+        turnId: firstTurn.latestTurn!.turnId,
+        stage: "initial",
+        workerSummary: "Exploration is complete; review the proposed implementation approach.",
+      });
+
+      const correcting = yield* harness.waitForThread(
+        THREAD_ID,
+        (thread) =>
+          thread.advisor?.state.status === "correcting" &&
+          thread.advisor.state.blockers.some((blocker) => blocker.status === "open"),
+      );
+      assert.equal(correcting.advisor?.state.status, "correcting");
+      assert.equal(correcting.advisor?.state.lastReview?.verdict, "fix");
+
+      const correctionTurn = yield* harness.waitForThread(
+        THREAD_ID,
+        (thread) =>
+          thread.latestTurn?.state === "running" &&
+          thread.latestTurn.turnId !== firstTurn.latestTurn!.turnId,
+      );
+      yield* harness.advisorReview.consult({
+        threadId: THREAD_ID,
+        turnId: correctionTurn.latestTurn!.turnId,
+        stage: "initial",
+        workerSummary: "The corrective approach directly addresses the persisted blocker.",
+      });
+
+      const approved = yield* harness.waitForThread(
+        THREAD_ID,
+        (thread) => thread.advisor?.state.status === "approved",
+      );
+      assert.equal(approved.advisor?.state.lastReview?.verdict, "ship");
+      assert.deepEqual(
+        approved.advisor?.state.blockers.map((blocker) => blocker.status),
+        ["resolved"],
+      );
+      assert.equal(
+        approved.messages.filter((message) => message.id.startsWith("advisor-correction:")).length,
+        1,
+      );
+      assert.equal(
+        approved.activities.filter((activity) => activity.kind === "advisor.review").length,
+        4,
+      );
     }),
   ),
 );

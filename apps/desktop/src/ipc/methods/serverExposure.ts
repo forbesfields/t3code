@@ -58,6 +58,19 @@ export const setTailscaleServeEnabled = DesktopIpc.makeIpcMethod({
   }),
 });
 
+export const setTailscaleDiscoveryEnabled = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.SET_TAILSCALE_DISCOVERY_ENABLED_CHANNEL,
+  payload: Schema.Boolean,
+  result: DesktopServerExposureStateSchema,
+  handler: Effect.fn("desktop.ipc.serverExposure.setTailscaleDiscoveryEnabled")(function* (
+    enabled,
+  ) {
+    const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+    const change = yield* serverExposure.setTailscaleDiscoveryEnabled(enabled);
+    return change.state;
+  }),
+});
+
 export const getAdvertisedEndpoints = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.GET_ADVERTISED_ENDPOINTS_CHANNEL,
   payload: Schema.Void,

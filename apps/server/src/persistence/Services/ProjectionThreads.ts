@@ -9,6 +9,7 @@
 import {
   IsoDateTime,
   ModelSelection,
+  OrchestrationAdvisor,
   NonNegativeInt,
   ProjectId,
   ProviderInteractionMode,
@@ -28,6 +29,7 @@ export const ProjectionThread = Schema.Struct({
   projectId: ProjectId,
   title: Schema.String,
   modelSelection: ModelSelection,
+  advisor: Schema.optionalKey(Schema.NullOr(OrchestrationAdvisor)),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(Schema.String),

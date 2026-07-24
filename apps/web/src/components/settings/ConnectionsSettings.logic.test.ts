@@ -1,8 +1,14 @@
-import type { DesktopWslState } from "@t3tools/contracts";
+import type { AdvertisedEndpoint } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { applyWslEnableSelection } from "./ConnectionsSettings.logic";
+import {
+  applyWslEnableSelection,
+  isTailscaleIpv4Host,
+  isTailscaleTailnetHost,
+  preferredRemoteEnvironmentUrlHint,
+  selectPairingEndpoint,
+} from "./ConnectionsSettings.logic";
 
-const baseWslState: DesktopWslState = {
+const baseWslState = {
   enabled: false,
   distro: null,
   available: true,
@@ -71,5 +77,53 @@ describe("applyWslEnableSelection", () => {
     expect(calls).toEqual(["setWslOnly:true", "setWslBackendEnabled:true"]);
     expect(setWslDistro).not.toHaveBeenCalled();
     expect(state).toMatchObject({ enabled: true, wslOnly: true });
+  });
+});
+
+function endpoint(
+  partial: Partial<AdvertisedEndpoint> & Pick<AdvertisedEndpoint, "id" | "httpBaseUrl">,
+): AdvertisedEndpoint {
+  return {
+    provider: { id: "desktop-core", label: "Desktop", kind: "core", isAddon: false },
+    source: "desktop-core",
+    label: partial.label ?? "Endpoint",
+    reachability: partial.reachability ?? "lan",
+    status: partial.status ?? "available",
+    compatibility: partial.compatibility ?? {},
+    description: partial.description ?? null,
+    isDefault: partial.isDefault ?? false,
+    ...partial,
+  };
+}
+
+describe("selectPairingEndpoint", () => {
+  it("prefers Tailscale HTTPS over LAN when both are available", () => {
+    const selected = selectPairingEndpoint([
+      endpoint({
+        id: "desktop-lan:http://192.168.1.20:3773",
+        httpBaseUrl: "http://192.168.1.20:3773/",
+        isDefault: true,
+      }),
+      endpoint({
+        id: "tailscale-magicdns:https://macbook.tailnet.ts.net",
+        httpBaseUrl: "https://macbook.tailnet.ts.net/",
+        reachability: "private-network",
+        compatibility: { hostedHttpsApp: "compatible" },
+      }),
+    ]);
+
+    expect(selected?.id).toBe("tailscale-magicdns:https://macbook.tailnet.ts.net");
+  });
+});
+
+describe("preferredRemoteEnvironmentUrlHint", () => {
+  it("nudges away from raw Tailscale IPs", () => {
+    expect(preferredRemoteEnvironmentUrlHint("http://100.64.0.2:3773")).toMatch(/MagicDNS/i);
+    expect(preferredRemoteEnvironmentUrlHint("https://mac.tailnet.ts.net")).toBeNull();
+  });
+
+  it("detects tailnet hosts", () => {
+    expect(isTailscaleTailnetHost("https://mac.tailnet.ts.net")).toBe(true);
+    expect(isTailscaleIpv4Host("100.64.0.2:3773")).toBe(true);
   });
 });

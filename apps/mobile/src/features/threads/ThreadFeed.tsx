@@ -2,6 +2,7 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { type LegendListRef } from "@legendapp/list/react-native";
 import type { EnvironmentId, MessageId, ThreadId, TurnId } from "@t3tools/contracts";
+import type { OrchestrationAdvisorAction } from "@t3tools/contracts";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { SymbolView } from "../../components/AppSymbol";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -91,6 +92,7 @@ import {
 } from "../../lib/threadActivity";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { ThreadWorkGroupToggle, ThreadWorkLog } from "./thread-work-log";
+import { ProposedPlanCard } from "./ProposedPlanCard";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import { useAssetUrl } from "../../state/assets";
 import { resolveWorkspaceRelativeFilePath } from "../files/filePath";
@@ -139,6 +141,8 @@ export interface ThreadFeedProps {
   readonly usesAutomaticContentInsets?: boolean;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
+  readonly onAdvisorAction?: (action: OrchestrationAdvisorAction) => void;
+  readonly respondingAdvisorAction?: boolean;
 }
 
 function MessageAttachmentImage(props: {
@@ -802,8 +806,10 @@ function renderFeedEntry(
     readonly onCopyWorkRow: (rowId: string, value: string) => void;
     readonly onToggleWorkGroup: (groupId: string) => void;
     readonly onToggleWorkRow: (rowId: string) => void;
-    readonly onToggleTurnFold: (turnId: TurnId) => void;
-    readonly onPressImage: (uri: string, headers?: Record<string, string>) => void;
+  readonly onToggleTurnFold: (turnId: TurnId) => void;
+  readonly onAdvisorAction?: (action: OrchestrationAdvisorAction) => void;
+  readonly respondingAdvisorAction?: boolean;
+  readonly onPressImage: (uri: string, headers?: Record<string, string>) => void;
     readonly onMarkdownLinkPress: (href: string) => void;
     readonly iconSubtleColor: string | import("react-native").ColorValue;
     readonly userBubbleColor: string | import("react-native").ColorValue;
@@ -981,6 +987,14 @@ function renderFeedEntry(
     );
   }
 
+  if (entry.type === "proposed-plan") {
+    return (
+      <View className="mb-4 px-1">
+        <ProposedPlanCard proposedPlan={entry.proposedPlan} />
+      </View>
+    );
+  }
+
   return (
     <ThreadWorkLog
       activities={entry.activities}
@@ -989,6 +1003,8 @@ function renderFeedEntry(
       iconSubtleColor={iconSubtleColor}
       onCopyRow={props.onCopyWorkRow}
       onToggleRow={props.onToggleWorkRow}
+      onAdvisorAction={props.onAdvisorAction}
+      respondingAdvisorAction={props.respondingAdvisorAction}
     />
   );
 }
@@ -1609,6 +1625,8 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         onToggleWorkGroup,
         onToggleWorkRow,
         onToggleTurnFold,
+        onAdvisorAction: props.onAdvisorAction,
+        respondingAdvisorAction: props.respondingAdvisorAction,
         onPressImage,
         onMarkdownLinkPress,
         iconSubtleColor,
@@ -1636,6 +1654,8 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onToggleTurnFold,
       onToggleWorkGroup,
       onToggleWorkRow,
+      props.onAdvisorAction,
+      props.respondingAdvisorAction,
       props.environmentId,
       props.skills,
     ],

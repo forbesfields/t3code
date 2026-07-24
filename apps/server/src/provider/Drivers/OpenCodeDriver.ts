@@ -187,6 +187,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         displayName,
         accentColor,
         enabled,
+        supportsAdvisorReview: true,
         snapshot,
         adapter,
         textGeneration,
