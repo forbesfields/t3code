@@ -22,9 +22,7 @@ import {
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
   formatWorkingDurationLabel,
-  shouldNavigateAfterProjectRemoval,
   shouldClearThreadSelectionOnMouseDown,
-  sortLogicalProjectsForSidebar,
   sortSettledThreadsForSidebarV2,
   sortThreadsForSidebarV2,
   sortProjectsForSidebar,
@@ -38,7 +36,6 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
-
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -47,56 +44,6 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
-
-describe("shouldNavigateAfterProjectRemoval", () => {
-  const projectThreads = [{ environmentId: "environment-local", id: "thread-1" }];
-
-  it("navigates away from a draft route owned by the removed project", () => {
-    expect(
-      shouldNavigateAfterProjectRemoval({
-        routeTarget: { kind: "draft", draftId: "draft-1" as never },
-        projectThreads,
-        projectDraftId: "draft-1",
-      }),
-    ).toBe(true);
-  });
-
-  it("does not navigate away from a different draft route", () => {
-    expect(
-      shouldNavigateAfterProjectRemoval({
-        routeTarget: { kind: "draft", draftId: "draft-2" as never },
-        projectThreads,
-        projectDraftId: "draft-1",
-      }),
-    ).toBe(false);
-  });
-
-  it("navigates away from a server thread owned by the removed project", () => {
-    expect(
-      shouldNavigateAfterProjectRemoval({
-        routeTarget: {
-          kind: "server",
-          threadRef: {
-            environmentId: EnvironmentId.make("environment-local"),
-            threadId: ThreadId.make("thread-1"),
-          },
-        },
-        projectThreads,
-        projectDraftId: null,
-      }),
-    ).toBe(true);
-  });
-
-  it("does not navigate from an unrelated route", () => {
-    expect(
-      shouldNavigateAfterProjectRemoval({
-        routeTarget: null,
-        projectThreads,
-        projectDraftId: null,
-      }),
-    ).toBe(false);
-  });
-});
 
 describe("archiveSelectedThreadEntries", () => {
   const entries = [{ threadKey: "one" }, { threadKey: "two" }, { threadKey: "three" }] as const;
@@ -244,6 +191,38 @@ describe("hasUnseenCompletion", () => {
         latestTurn: makeLatestTurn(),
         lastVisitedAt: undefined,
         session: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("suppresses completion while an orchestrator review is unresolved", () => {
+    expect(
+      hasUnseenCompletion({
+        hasActionableProposedPlan: false,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        interactionMode: "default",
+        latestTurn: makeLatestTurn(),
+        lastVisitedAt: "2026-03-09T10:04:00.000Z",
+        session: null,
+        advisor: {
+          config: {
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claude_review"),
+              model: "opus",
+            },
+            maxCorrectionAttempts: 2,
+          },
+          state: {
+            status: "reviewing",
+            correctionAttempts: 0,
+            activeTurnId: null,
+            blockers: [],
+            lastReview: null,
+            error: null,
+            updatedAt: "2026-03-09T10:05:00.000Z",
+          },
+        },
       }),
     ).toBe(false);
   });
@@ -808,7 +787,6 @@ describe("sortSettledThreadsForSidebarV2", () => {
       settled({
         id: "settled-first",
         settledAt: "2026-03-09T10:00:00.000Z",
-        // Created/active later than the other thread: settle time must win.
         latestUserMessageAt: "2026-03-09T09:59:00.000Z",
       }),
       settled({
@@ -832,8 +810,6 @@ describe("sortSettledThreadsForSidebarV2", () => {
   });
 
   it("counts a turn completion as activity for auto-settled threads", () => {
-    // The message came in before the other thread's, but its turn finished
-    // after: completion time is the real "work ended" moment.
     const sorted = sortSettledThreadsForSidebarV2([
       settled({ id: "message-only", latestUserMessageAt: "2026-03-09T10:04:00.000Z" }),
       settled({
@@ -1027,24 +1003,26 @@ describe("resolveThreadStatusPill", () => {
 });
 
 describe("resolveThreadRowClassName", () => {
-  it("uses the active sidebar surface when a thread is both selected and active", () => {
+  it("uses the darker selected palette when a thread is both selected and active", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
-    expect(className).toContain("bg-sidebar-row-active");
-    expect(className).toContain("text-sidebar-foreground");
-    expect(className).not.toContain("bg-primary");
+    expect(className).toContain("bg-primary/22");
+    expect(className).toContain("hover:bg-primary/26");
+    expect(className).toContain("dark:bg-primary/30");
+    expect(className).not.toContain("bg-accent/85");
   });
 
   it("uses selected hover colors for selected threads", () => {
     const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
-    expect(className).toContain("bg-sidebar-row-selected");
-    expect(className).toContain("hover:bg-sidebar-row-active");
-    expect(className).not.toContain("bg-primary");
+    expect(className).toContain("bg-primary/15");
+    expect(className).toContain("hover:bg-primary/19");
+    expect(className).toContain("dark:bg-primary/22");
+    expect(className).not.toContain("hover:bg-accent");
   });
 
-  it("uses the active sidebar surface for active-only threads", () => {
+  it("keeps the accent palette for active-only threads", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
-    expect(className).toContain("bg-sidebar-row-active");
-    expect(className).toContain("hover:bg-sidebar-row-active");
+    expect(className).toContain("bg-accent/85");
+    expect(className).toContain("hover:bg-accent");
   });
 });
 
@@ -1267,6 +1245,24 @@ describe("getFallbackThreadIdAfterDelete", () => {
   });
 });
 describe("sortProjectsForSidebar", () => {
+  it("sorts project titles alphabetically with natural numeric ordering", () => {
+    const sorted = sortProjectsForSidebar(
+      [
+        makeProject({ id: ProjectId.make("project-10"), title: "Project 10" }),
+        makeProject({ id: ProjectId.make("project-2"), title: "project 2" }),
+        makeProject({ id: ProjectId.make("project-alpha"), title: "Alpha" }),
+      ],
+      [],
+      "alphabetical",
+    );
+
+    expect(sorted.map((project) => project.id)).toEqual([
+      ProjectId.make("project-alpha"),
+      ProjectId.make("project-2"),
+      ProjectId.make("project-10"),
+    ]);
+  });
+
   it("sorts projects by the most recent user message across their threads", () => {
     const projects = [
       makeProject({ id: ProjectId.make("project-1"), title: "Older project" }),
@@ -1427,6 +1423,22 @@ describe("sortProjectsForSidebar", () => {
 });
 
 describe("sortScopedProjectsForSidebar", () => {
+  it("preserves alphabetical sorting across environments", () => {
+    const projects = [
+      makeProject({ id: ProjectId.make("project-10"), title: "Project 10" }),
+      makeProject({ id: ProjectId.make("project-2"), title: "project 2" }),
+      makeProject({ id: ProjectId.make("project-alpha"), title: "Alpha" }),
+    ];
+
+    const sorted = sortScopedProjectsForSidebar(projects, [], "alphabetical");
+
+    expect(sorted.map((project) => project.id)).toEqual([
+      ProjectId.make("project-alpha"),
+      ProjectId.make("project-2"),
+      ProjectId.make("project-10"),
+    ]);
+  });
+
   it("keeps identical project ids in different environments separate", () => {
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const sharedProjectId = ProjectId.make("shared-project");
@@ -1493,42 +1505,5 @@ describe("sortScopedProjectsForSidebar", () => {
       "Visible project",
       "Archived-only project",
     ]);
-  });
-});
-
-describe("sortLogicalProjectsForSidebar", () => {
-  it("uses saved order only in manual mode and activity order otherwise", () => {
-    const olderProjectId = ProjectId.make("project-older");
-    const newerProjectId = ProjectId.make("project-newer");
-    const projects = [
-      {
-        ...makeProject({ id: olderProjectId, title: "Older project" }),
-        projectKey: "logical-older",
-        memberProjectRefs: [{ environmentId: localEnvironmentId, projectId: olderProjectId }],
-      },
-      {
-        ...makeProject({ id: newerProjectId, title: "Newer project" }),
-        projectKey: "logical-newer",
-        memberProjectRefs: [{ environmentId: localEnvironmentId, projectId: newerProjectId }],
-      },
-    ];
-    const threads = [
-      makeThread({
-        projectId: olderProjectId,
-        updatedAt: "2026-03-09T10:01:00.000Z",
-      }),
-      makeThread({
-        id: ThreadId.make("thread-newer"),
-        projectId: newerProjectId,
-        updatedAt: "2026-03-09T10:05:00.000Z",
-      }),
-    ];
-
-    expect(sortLogicalProjectsForSidebar(projects, threads, "manual")).toEqual(projects);
-    expect(
-      sortLogicalProjectsForSidebar(projects, threads, "updated_at").map(
-        (project) => project.projectKey,
-      ),
-    ).toEqual(["logical-newer", "logical-older"]);
   });
 });
