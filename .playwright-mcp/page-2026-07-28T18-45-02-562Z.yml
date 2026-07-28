@@ -1,0 +1,166 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e6]:
+      - link "Go to threads" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img "T3" [ref=e9]
+        - generic [ref=e11]: Code
+      - list [ref=e109]:
+        - listitem [ref=e110]:
+          - button "General" [ref=e111] [cursor=pointer]
+        - listitem [ref=e116]:
+          - button "Keybindings" [ref=e117] [cursor=pointer]
+        - listitem [ref=e121]:
+          - button "Providers" [ref=e122] [cursor=pointer]
+        - listitem [ref=e127]:
+          - button "Source Control" [ref=e128] [cursor=pointer]
+        - listitem [ref=e134]:
+          - button "Connections" [ref=e135] [cursor=pointer]
+        - listitem [ref=e140]:
+          - button "Beta" [ref=e141] [cursor=pointer]
+        - listitem [ref=e145]:
+          - button "Archive" [ref=e146] [cursor=pointer]
+      - list [ref=e153]:
+        - listitem [ref=e154]:
+          - button "Back" [ref=e155] [cursor=pointer]
+      - button "Resize Sidebar" [ref=e63]
+    - main [ref=e159]:
+      - generic [ref=e160]:
+        - generic [ref=e162]:
+          - generic [ref=e163]: Settings
+          - generic [ref=e164]:
+            - button "Restore defaults" [disabled]
+        - generic [ref=e167]:
+          - generic [ref=e168]:
+            - heading "General" [level=2] [ref=e170]
+            - generic [ref=e172]:
+              - generic [ref=e174]:
+                - generic [ref=e175]:
+                  - heading "Theme" [level=3] [ref=e177]
+                  - paragraph [ref=e179]: Choose how T3 Code looks across the app.
+                - generic [ref=e180]:
+                  - combobox "Theme preference" [ref=e181] [cursor=pointer]:
+                    - generic [ref=e182]: System
+                  - textbox [ref=e184]: system
+              - generic [ref=e186]:
+                - generic [ref=e187]:
+                  - heading "Glass opacity" [level=3] [ref=e189]
+                  - paragraph [ref=e191]: Control how transparent glass surfaces are. Higher values make menus, dialogs, and the composer more solid.
+                - generic [ref=e193]:
+                  - status [ref=e194]: 80%
+                  - slider "Glass opacity" [ref=e195] [cursor=pointer]: "80"
+              - generic [ref=e197]:
+                - generic [ref=e198]:
+                  - heading "Project Grouping" [level=3] [ref=e200]
+                  - paragraph [ref=e202]: Combine matching repositories across environments.
+                - generic [ref=e203]:
+                  - switch "Project Grouping" [checked] [ref=e204] [cursor=pointer]
+                  - checkbox [checked] [ref=e205]
+              - generic [ref=e207]:
+                - generic [ref=e208]:
+                  - heading "Time format" [level=3] [ref=e210]
+                  - paragraph [ref=e212]: System default follows your browser or OS clock preference.
+                - generic [ref=e213]:
+                  - combobox "Timestamp format" [ref=e214] [cursor=pointer]:
+                    - generic [ref=e215]: System default
+                  - textbox [ref=e217]: locale
+              - generic [ref=e219]:
+                - generic [ref=e220]:
+                  - heading "Word wrap" [level=3] [ref=e222]
+                  - paragraph [ref=e224]: Wrap long lines in code blocks, tables, diffs, and file previews by default.
+                - generic [ref=e225]:
+                  - switch "Wrap code, tables, diffs, and file previews by default" [checked] [ref=e226] [cursor=pointer]
+                  - checkbox [checked] [ref=e227]
+              - generic [ref=e229]:
+                - generic [ref=e230]:
+                  - heading "Hide whitespace changes" [level=3] [ref=e232]
+                  - paragraph [ref=e234]: Set whether the diff panel ignores whitespace-only edits by default.
+                - generic [ref=e235]:
+                  - switch "Hide whitespace changes by default" [checked] [ref=e236] [cursor=pointer]
+                  - checkbox [checked] [ref=e237]
+              - generic [ref=e239]:
+                - generic [ref=e240]:
+                  - heading "Assistant output" [level=3] [ref=e242]
+                  - paragraph [ref=e244]: Show token-by-token output while a response is in progress.
+                - generic [ref=e245]:
+                  - switch "Stream assistant messages" [ref=e246] [cursor=pointer]
+                  - checkbox [ref=e247]
+              - generic [ref=e249]:
+                - generic [ref=e250]:
+                  - heading "Provider update checks" [level=3] [ref=e252]
+                  - paragraph [ref=e254]: Check installed provider CLIs for newer available versions.
+                - generic [ref=e255]:
+                  - switch "Check provider versions" [checked] [ref=e256] [cursor=pointer]
+                  - checkbox [checked] [ref=e257]
+              - generic [ref=e259]:
+                - generic [ref=e260]:
+                  - heading "Auto-open task panel" [level=3] [ref=e262]
+                  - paragraph [ref=e264]: Open the right-side plan and task panel automatically when steps appear.
+                - generic [ref=e265]:
+                  - switch "Open the task panel automatically" [ref=e266] [cursor=pointer]
+                  - checkbox [ref=e267]
+              - generic [ref=e269]:
+                - generic [ref=e270]:
+                  - heading "New threads" [level=3] [ref=e272]
+                  - paragraph [ref=e274]: Pick the default workspace mode for newly created draft threads.
+                - generic [ref=e275]:
+                  - combobox "Default thread mode" [ref=e276] [cursor=pointer]:
+                    - generic [ref=e277]: Local
+                  - textbox [ref=e279]: local
+              - generic [ref=e281]:
+                - generic [ref=e282]:
+                  - heading "Add project starts in" [level=3] [ref=e284]
+                  - paragraph [ref=e286]: Leave empty to use "~/" when the Add Project browser opens.
+                - textbox "Add project base directory" [ref=e289]:
+                  - /placeholder: ~/
+              - generic [ref=e291]:
+                - generic [ref=e292]:
+                  - heading "Archive confirmation" [level=3] [ref=e294]
+                  - paragraph [ref=e296]: Require a second click on the inline archive action before a thread is archived.
+                - generic [ref=e297]:
+                  - switch "Confirm thread archiving" [ref=e298] [cursor=pointer]
+                  - checkbox [ref=e299]
+              - generic [ref=e301]:
+                - generic [ref=e302]:
+                  - heading "Delete confirmation" [level=3] [ref=e304]
+                  - paragraph [ref=e306]: Ask before deleting a thread and its chat history.
+                - generic [ref=e307]:
+                  - switch "Confirm thread deletion" [checked] [ref=e308] [cursor=pointer]
+                  - checkbox [checked] [ref=e309]
+              - generic [ref=e311]:
+                - generic [ref=e312]:
+                  - heading "Text generation model" [level=3] [ref=e314]
+                  - paragraph [ref=e316]: Default model for generated text like thread titles and source control content. Source control settings can override it with a dedicated source control writer model.
+                - generic [ref=e318]:
+                  - button "GPT-5.6-Luna" [ref=e319] [cursor=pointer]
+                  - button "Medium · Standard" [ref=e324] [cursor=pointer]
+          - generic [ref=e327]:
+            - heading "About" [level=2] [ref=e329]
+            - generic [ref=e331]:
+              - generic [ref=e334]:
+                - heading "Version 0.0.28" [level=3] [ref=e336]:
+                  - generic [ref=e337]:
+                    - generic [ref=e338]: Version
+                    - code [ref=e339]: 0.0.28
+                - paragraph [ref=e341]: Current version of the application.
+              - generic [ref=e343]:
+                - generic [ref=e344]:
+                  - heading "Diagnostics" [level=3] [ref=e346]
+                  - paragraph [ref=e348]: Local trace file.
+                - link "View diagnostics" [ref=e350] [cursor=pointer]:
+                  - /url: /settings/diagnostics
+    - button "Toggle main sidebar" [pressed] [ref=e73] [cursor=pointer]:
+      - generic [ref=e74]: Toggle Sidebar
+  - generic:
+    - region "Notifications"
+  - generic:
+    - region "Notifications":
+      - dialog [ref=e84]:
+        - button "Dismiss notification" [ref=e86] [cursor=pointer]
+        - generic [ref=e90]:
+          - generic [ref=e100]:
+            - 'heading "Update Available: Claude v2.1.220" [level=2] [ref=e101]'
+            - paragraph [ref=e102]: Install the update now or review provider settings.
+          - generic [ref=e103]:
+            - button "Settings" [ref=e104] [cursor=pointer]
+            - button "Update" [ref=e105] [cursor=pointer]

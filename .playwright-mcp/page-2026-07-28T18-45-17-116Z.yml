@@ -1,0 +1,138 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e6]:
+      - link "Go to threads" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img "T3" [ref=e9]
+        - generic [ref=e11]: Code
+      - list [ref=e109]:
+        - listitem [ref=e110]:
+          - button "General" [ref=e111] [cursor=pointer]
+        - listitem [ref=e116]:
+          - button "Keybindings" [ref=e117] [cursor=pointer]
+        - listitem [ref=e121]:
+          - button "Providers" [active] [ref=e122] [cursor=pointer]
+        - listitem [ref=e127]:
+          - button "Source Control" [ref=e128] [cursor=pointer]
+        - listitem [ref=e134]:
+          - button "Connections" [ref=e135] [cursor=pointer]
+        - listitem [ref=e140]:
+          - button "Beta" [ref=e141] [cursor=pointer]
+        - listitem [ref=e145]:
+          - button "Archive" [ref=e146] [cursor=pointer]
+      - list [ref=e153]:
+        - listitem [ref=e154]:
+          - button "Back" [ref=e155] [cursor=pointer]
+      - button "Resize Sidebar" [ref=e63]
+    - main [ref=e159]:
+      - generic [ref=e160]:
+        - generic [ref=e161]: Settings
+        - generic [ref=e353]:
+          - generic [ref=e354]:
+            - heading "Providers" [level=2] [ref=e355]
+            - generic [ref=e357]:
+              - generic [ref=e358]: Checked just now
+              - button "Add provider instance" [ref=e359] [cursor=pointer]
+              - button "Refresh provider status" [ref=e360] [cursor=pointer]
+          - generic [ref=e361]:
+            - generic [ref=e364]:
+              - generic [ref=e365]:
+                - generic [ref=e366]:
+                  - heading "Codex" [level=3] [ref=e370]
+                  - code [ref=e371]: v0.145.0
+                - paragraph [ref=e372]:
+                  - generic [ref=e373]: Authenticated as
+                  - button "Toggle account email visibility" [ref=e375] [cursor=pointer]: dt7epy-4eezgz.2wh8wzzup@cbx5pa.2q6
+                  - generic [ref=e376]: · ChatGPT Plus Subscription
+                - generic [ref=e377]: "Primary: 0% used · resets Aug 4, 12:44 PM"
+              - generic [ref=e379]:
+                - button "Toggle Codex details" [ref=e380] [cursor=pointer]
+                - switch "Enable Codex" [checked] [ref=e381] [cursor=pointer]
+                - checkbox [checked] [ref=e382]
+            - generic [ref=e385]:
+              - generic [ref=e386]:
+                - generic [ref=e387]:
+                  - heading "Claude" [level=3] [ref=e391]
+                  - code [ref=e392]: v2.1.207
+                  - button "Update available — view details" [ref=e393] [cursor=pointer]
+                - paragraph [ref=e394]:
+                  - generic [ref=e395]: Authenticated · Claude API Key
+                  - generic [ref=e396]: "- Claude Code v2.1.207 is too old for Claude Opus 5. Upgrade to v2.1.219 or newer to access it."
+              - generic [ref=e397]:
+                - button "Toggle Claude details" [ref=e398] [cursor=pointer]
+                - switch "Enable Claude" [checked] [ref=e399] [cursor=pointer]
+                - checkbox [checked] [ref=e400]
+            - generic [ref=e403]:
+              - generic [ref=e404]:
+                - generic [ref=e405]:
+                  - heading "Cursor" [level=3] [ref=e409]
+                  - generic [ref=e410]: Early Access
+                - paragraph [ref=e411]:
+                  - generic [ref=e412]: Disabled
+                  - generic [ref=e413]: "- Cursor is disabled in T3 Code settings."
+              - generic [ref=e414]:
+                - button "Toggle Cursor details" [ref=e415] [cursor=pointer]
+                - switch "Enable Cursor" [ref=e416] [cursor=pointer]
+                - checkbox [ref=e417]
+            - generic [ref=e420]:
+              - generic [ref=e421]:
+                - generic [ref=e422]:
+                  - heading "Grok" [level=3] [ref=e427]
+                  - generic [ref=e428]: Early Access
+                - paragraph [ref=e429]:
+                  - generic [ref=e430]: Not found
+                  - generic [ref=e431]: "- Grok CLI (`grok`) is not installed or not on PATH."
+              - generic [ref=e432]:
+                - button "Toggle Grok details" [ref=e433] [cursor=pointer]
+                - switch "Enable Grok" [checked] [ref=e434] [cursor=pointer]
+                - checkbox [checked] [ref=e435]
+            - generic [ref=e438]:
+              - generic [ref=e439]:
+                - generic [ref=e440]:
+                  - heading "Antigravity" [level=3] [ref=e444]
+                  - generic [ref=e445]: Google AI
+                - paragraph [ref=e446]:
+                  - generic [ref=e447]: Needs attention
+                  - generic [ref=e448]: "- Discovering Antigravity models..."
+              - generic [ref=e449]:
+                - button "Toggle Antigravity details" [ref=e450] [cursor=pointer]
+                - switch "Enable Antigravity" [checked] [ref=e451] [cursor=pointer]
+                - checkbox [checked] [ref=e452]
+            - generic [ref=e455]:
+              - generic [ref=e456]:
+                - heading "OpenCode" [level=3] [ref=e463]
+                - paragraph [ref=e464]:
+                  - generic [ref=e465]: Not found
+                  - generic [ref=e466]: "- OpenCode CLI (`opencode`) is not installed or not on PATH."
+              - generic [ref=e467]:
+                - button "Toggle OpenCode details" [ref=e468] [cursor=pointer]
+                - switch "Enable OpenCode" [checked] [ref=e469] [cursor=pointer]
+                - checkbox [checked] [ref=e470]
+            - generic [ref=e473]:
+              - generic [ref=e474]:
+                - generic [ref=e475]:
+                  - heading "Pi" [level=3] [ref=e481]
+                  - generic [ref=e482]: Personal Fork
+                  - code [ref=e483]: v0.82.0
+                - paragraph [ref=e484]:
+                  - generic [ref=e485]: Authenticated
+                  - generic [ref=e486]: "- 93 Pi models available."
+              - generic [ref=e487]:
+                - button "Toggle Pi details" [ref=e488] [cursor=pointer]
+                - switch "Enable Pi" [checked] [ref=e489] [cursor=pointer]
+                - checkbox [checked] [ref=e490]
+    - button "Toggle main sidebar" [pressed] [ref=e73] [cursor=pointer]:
+      - generic [ref=e74]: Toggle Sidebar
+  - generic:
+    - region "Notifications"
+  - generic:
+    - region "Notifications":
+      - dialog [ref=e84]:
+        - button "Dismiss notification" [ref=e86] [cursor=pointer]
+        - generic [ref=e90]:
+          - generic [ref=e100]:
+            - 'heading "Update Available: Claude v2.1.220" [level=2] [ref=e101]'
+            - paragraph [ref=e102]: Install the update now or review provider settings.
+          - generic [ref=e103]:
+            - button "Settings" [ref=e104] [cursor=pointer]
+            - button "Update" [ref=e105] [cursor=pointer]

@@ -1,0 +1,43 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e6]:
+      - link "Go to threads" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img "T3" [ref=e9]
+        - generic [ref=e11]: Code
+      - generic [ref=e13]:
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - button "Search ⌘K" [ref=e17] [cursor=pointer]:
+              - generic [ref=e21]: Search
+              - generic: ⌘K
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - generic [ref=e24]: Projects
+            - generic [ref=e25]:
+              - button [ref=e26] [cursor=pointer]
+              - button "Add project" [ref=e30] [cursor=pointer]
+          - list
+          - generic [ref=e33]: No projects yet
+      - separator [ref=e34]
+      - list [ref=e36]:
+        - listitem [ref=e37]:
+          - button "Today" [ref=e38] [cursor=pointer]
+        - listitem [ref=e43]:
+          - button "Hermes" [ref=e44] [cursor=pointer]
+        - listitem [ref=e49]:
+          - button "Accounts" [ref=e50] [cursor=pointer]
+        - listitem [ref=e57]:
+          - button "Settings" [ref=e58] [cursor=pointer]
+      - button "Resize Sidebar" [ref=e63]
+    - main [ref=e64]:
+      - generic [ref=e68]:
+        - generic [ref=e69]: What should we work on?
+        - generic [ref=e70]: Add a project to start your first thread.
+        - button "Add project" [ref=e72] [cursor=pointer]
+    - button "Toggle main sidebar" [pressed] [ref=e73] [cursor=pointer]:
+      - generic [ref=e74]: Toggle Sidebar
+  - generic:
+    - region "Notifications"
+  - generic:
+    - region "Notifications"

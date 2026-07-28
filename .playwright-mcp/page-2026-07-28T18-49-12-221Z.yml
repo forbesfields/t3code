@@ -1,0 +1,268 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e3]:
+    - generic [ref=f2e6]:
+      - link "Go to threads" [ref=f2e8] [cursor=pointer]:
+        - /url: /
+        - img "T3" [ref=f2e9]
+        - generic [ref=f2e11]: Code
+      - list [ref=f2e15]:
+        - listitem [ref=f2e16]:
+          - button "General" [ref=f2e17] [cursor=pointer]
+        - listitem [ref=f2e22]:
+          - button "Keybindings" [ref=f2e23] [cursor=pointer]
+        - listitem [ref=f2e27]:
+          - button "Providers" [ref=f2e28] [cursor=pointer]
+        - listitem [ref=f2e33]:
+          - button "Source Control" [ref=f2e34] [cursor=pointer]
+        - listitem [ref=f2e40]:
+          - button "Connections" [ref=f2e41] [cursor=pointer]
+        - listitem [ref=f2e46]:
+          - button "Beta" [ref=f2e47] [cursor=pointer]
+        - listitem [ref=f2e51]:
+          - button "Archive" [ref=f2e52] [cursor=pointer]
+      - list [ref=f2e59]:
+        - listitem [ref=f2e60]:
+          - button "Back" [ref=f2e61] [cursor=pointer]
+      - button "Resize Sidebar" [ref=f2e65]
+    - main [ref=f2e66]:
+      - generic [ref=f2e67]:
+        - generic [ref=f2e68]: Settings
+        - generic [ref=f2e74]:
+          - generic [ref=f2e75]:
+            - heading "Providers" [level=2] [ref=f2e76]
+            - generic [ref=f2e78]:
+              - generic [ref=f2e188]: Checked just now
+              - button "Add provider instance" [ref=f2e79] [cursor=pointer]
+              - button "Refresh provider status" [ref=f2e80] [cursor=pointer]
+          - generic [ref=f2e81]:
+            - generic [ref=f2e84]:
+              - generic [ref=f2e85]:
+                - generic [ref=f2e86]:
+                  - heading "Codex" [level=3] [ref=f2e90]
+                  - code [ref=f2e189]: v0.145.0
+                - paragraph [ref=f2e91]:
+                  - generic [ref=f2e92]: Authenticated as
+                  - button "Toggle account email visibility" [ref=f2e191] [cursor=pointer]: dt7epy-4eezgz.2wh8wzzup@cbx5pa.2q6
+                  - generic [ref=f2e192]: · ChatGPT Plus Subscription
+                - generic [ref=f2e193]: "Primary: 0% used · resets Aug 4, 12:48 PM"
+              - generic [ref=f2e94]:
+                - button "Toggle Codex details" [ref=f2e95] [cursor=pointer]
+                - switch "Enable Codex" [checked] [ref=f2e96] [cursor=pointer]
+                - checkbox [checked] [ref=f2e97]
+            - generic [ref=f2e100]:
+              - generic [ref=f2e101]:
+                - generic [ref=f2e102]:
+                  - heading "Claude" [level=3] [ref=f2e106]
+                  - code [ref=f2e195]: v2.1.207
+                  - button "Update available — view details" [ref=f2e196] [cursor=pointer]
+                - paragraph [ref=f2e107]:
+                  - generic [ref=f2e108]: Authenticated · Claude API Key
+                  - generic [ref=f2e109]: "- Claude Code v2.1.207 is too old for Claude Opus 5. Upgrade to v2.1.219 or newer to access it."
+              - generic [ref=f2e110]:
+                - button "Toggle Claude details" [ref=f2e111] [cursor=pointer]
+                - switch "Enable Claude" [checked] [ref=f2e112] [cursor=pointer]
+                - checkbox [checked] [ref=f2e113]
+            - generic [ref=f2e199]:
+              - generic [ref=f2e200]:
+                - generic [ref=f2e201]:
+                  - heading "Cursor" [level=3] [ref=f2e205]
+                  - generic [ref=f2e206]: Early Access
+                - paragraph [ref=f2e207]:
+                  - generic [ref=f2e208]: Disabled
+                  - generic [ref=f2e209]: "- Cursor is disabled in T3 Code settings."
+              - generic [ref=f2e210]:
+                - button "Toggle Cursor details" [ref=f2e211] [cursor=pointer]
+                - switch "Enable Cursor" [ref=f2e212] [cursor=pointer]
+                - checkbox [ref=f2e213]
+            - generic [ref=f2e116]:
+              - generic [ref=f2e117]:
+                - generic [ref=f2e118]:
+                  - heading "Grok" [level=3] [ref=f2e123]
+                  - generic [ref=f2e124]: Early Access
+                - paragraph [ref=f2e125]:
+                  - generic [ref=f2e126]: Not found
+                  - generic [ref=f2e127]: "- Grok CLI (`grok`) is not installed or not on PATH."
+              - generic [ref=f2e128]:
+                - button "Toggle Grok details" [ref=f2e129] [cursor=pointer]
+                - switch "Enable Grok" [checked] [ref=f2e130] [cursor=pointer]
+                - checkbox [checked] [ref=f2e131]
+            - generic [ref=f2e132]:
+              - generic [ref=f2e134]:
+                - generic [ref=f2e135]:
+                  - generic [ref=f2e136]:
+                    - heading "Antigravity" [level=3] [ref=f2e140]
+                    - generic [ref=f2e141]: Google AI
+                    - code [ref=f2e214]: v1.1.8
+                  - paragraph [ref=f2e142]:
+                    - generic [ref=f2e143]: Authenticated
+                    - generic [ref=f2e144]: "- 11 Antigravity models available."
+                - generic [ref=f2e145]:
+                  - button "Toggle Antigravity details" [active] [ref=f2e146] [cursor=pointer]
+                  - switch "Enable Antigravity" [checked] [ref=f2e147] [cursor=pointer]
+                  - checkbox [checked] [ref=f2e148]
+              - generic [ref=f2e218]:
+                - generic [ref=f2e220]:
+                  - text: Display name
+                  - textbox "Display name Optional label shown in the provider list." [ref=f2e222]:
+                    - /placeholder: Antigravity
+                  - generic [ref=f2e223]: Optional label shown in the provider list.
+                - generic [ref=f2e225]:
+                  - generic [ref=f2e226]: Accent color
+                  - generic [ref=f2e227]:
+                    - button "Choose custom accent color for Antigravity" [ref=f2e228] [cursor=pointer]
+                    - generic [ref=f2e233]:
+                      - 'button "Select #2563eb color" [ref=f2e234] [cursor=pointer]'
+                      - 'button "Select #16a34a color" [ref=f2e235] [cursor=pointer]'
+                      - 'button "Select #ea580c color" [ref=f2e236] [cursor=pointer]'
+                      - 'button "Select #dc2626 color" [ref=f2e237] [cursor=pointer]'
+                      - 'button "Select #7c3aed color" [ref=f2e238] [cursor=pointer]'
+                      - 'button "Select #0891b2 color" [ref=f2e239] [cursor=pointer]'
+                    - button
+                  - generic [ref=f2e240]: Used to distinguish this instance in picker rails and model lists.
+                - generic [ref=f2e242]:
+                  - generic [ref=f2e243]:
+                    - generic [ref=f2e244]: Environment variables
+                    - button "Add" [ref=f2e245] [cursor=pointer]
+                  - paragraph [ref=f2e246]: Add variables to pass API keys, base URLs, or other per-instance CLI settings.
+                  - generic [ref=f2e247]: Sensitive values are stored separately and are not returned to the app after saving.
+                - generic [ref=f2e249]:
+                  - text: Binary path
+                  - textbox "Binary path Path to the Antigravity CLI binary." [ref=f2e251]:
+                    - /placeholder: agy
+                    - text: agy
+                  - generic [ref=f2e252]: Path to the Antigravity CLI binary.
+                - generic [ref=f2e253]:
+                  - generic [ref=f2e254]: Models
+                  - generic [ref=f2e255]: 11 models available.
+                  - generic [ref=f2e256]:
+                    - generic [ref=f2e257]:
+                      - generic [ref=f2e258]:
+                        - generic [ref=f2e259]: Gemini 3.6 Flash High
+                        - button "Details for Gemini 3.6 Flash High" [ref=f2e260] [cursor=pointer]
+                      - generic [ref=f2e261]:
+                        - button "Add Gemini 3.6 Flash High to favorites" [ref=f2e262] [cursor=pointer]
+                        - button "Move Gemini 3.6 Flash High up" [disabled]
+                        - button "Move Gemini 3.6 Flash High down" [ref=f2e263] [cursor=pointer]
+                        - button "Hide Gemini 3.6 Flash High" [ref=f2e264] [cursor=pointer]
+                    - generic [ref=f2e265]:
+                      - generic [ref=f2e266]:
+                        - generic [ref=f2e267]: Gemini 3.6 Flash Medium
+                        - button "Details for Gemini 3.6 Flash Medium" [ref=f2e268] [cursor=pointer]
+                      - generic [ref=f2e269]:
+                        - button "Add Gemini 3.6 Flash Medium to favorites" [ref=f2e270] [cursor=pointer]
+                        - button "Move Gemini 3.6 Flash Medium up" [ref=f2e271] [cursor=pointer]
+                        - button "Move Gemini 3.6 Flash Medium down" [ref=f2e272] [cursor=pointer]
+                        - button "Hide Gemini 3.6 Flash Medium" [ref=f2e273] [cursor=pointer]
+                    - generic [ref=f2e274]:
+                      - generic [ref=f2e275]:
+                        - generic [ref=f2e276]: Gemini 3.6 Flash Low
+                        - button "Details for Gemini 3.6 Flash Low" [ref=f2e277] [cursor=pointer]
+                      - generic [ref=f2e278]:
+                        - button "Add Gemini 3.6 Flash Low to favorites" [ref=f2e279] [cursor=pointer]
+                        - button "Move Gemini 3.6 Flash Low up" [ref=f2e280] [cursor=pointer]
+                        - button "Move Gemini 3.6 Flash Low down" [ref=f2e281] [cursor=pointer]
+                        - button "Hide Gemini 3.6 Flash Low" [ref=f2e282] [cursor=pointer]
+                    - generic [ref=f2e283]:
+                      - generic [ref=f2e284]:
+                        - generic [ref=f2e285]: Gemini 3.5 Flash High
+                        - button "Details for Gemini 3.5 Flash High" [ref=f2e286] [cursor=pointer]
+                      - generic [ref=f2e287]:
+                        - button "Add Gemini 3.5 Flash High to favorites" [ref=f2e288] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash High up" [ref=f2e289] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash High down" [ref=f2e290] [cursor=pointer]
+                        - button "Hide Gemini 3.5 Flash High" [ref=f2e291] [cursor=pointer]
+                    - generic [ref=f2e292]:
+                      - generic [ref=f2e293]:
+                        - generic [ref=f2e294]: Gemini 3.5 Flash Medium
+                        - button "Details for Gemini 3.5 Flash Medium" [ref=f2e295] [cursor=pointer]
+                      - generic [ref=f2e296]:
+                        - button "Add Gemini 3.5 Flash Medium to favorites" [ref=f2e297] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash Medium up" [ref=f2e298] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash Medium down" [ref=f2e299] [cursor=pointer]
+                        - button "Hide Gemini 3.5 Flash Medium" [ref=f2e300] [cursor=pointer]
+                    - generic [ref=f2e301]:
+                      - generic [ref=f2e302]:
+                        - generic [ref=f2e303]: Gemini 3.5 Flash Low
+                        - button "Details for Gemini 3.5 Flash Low" [ref=f2e304] [cursor=pointer]
+                      - generic [ref=f2e305]:
+                        - button "Add Gemini 3.5 Flash Low to favorites" [ref=f2e306] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash Low up" [ref=f2e307] [cursor=pointer]
+                        - button "Move Gemini 3.5 Flash Low down" [ref=f2e308] [cursor=pointer]
+                        - button "Hide Gemini 3.5 Flash Low" [ref=f2e309] [cursor=pointer]
+                    - generic [ref=f2e310]:
+                      - generic [ref=f2e311]:
+                        - generic [ref=f2e312]: Gemini 3.1 Pro High
+                        - button "Details for Gemini 3.1 Pro High" [ref=f2e313] [cursor=pointer]
+                      - generic [ref=f2e314]:
+                        - button "Add Gemini 3.1 Pro High to favorites" [ref=f2e315] [cursor=pointer]
+                        - button "Move Gemini 3.1 Pro High up" [ref=f2e316] [cursor=pointer]
+                        - button "Move Gemini 3.1 Pro High down" [ref=f2e317] [cursor=pointer]
+                        - button "Hide Gemini 3.1 Pro High" [ref=f2e318] [cursor=pointer]
+                    - generic [ref=f2e319]:
+                      - generic [ref=f2e320]:
+                        - generic [ref=f2e321]: Gemini 3.1 Pro Low
+                        - button "Details for Gemini 3.1 Pro Low" [ref=f2e322] [cursor=pointer]
+                      - generic [ref=f2e323]:
+                        - button "Add Gemini 3.1 Pro Low to favorites" [ref=f2e324] [cursor=pointer]
+                        - button "Move Gemini 3.1 Pro Low up" [ref=f2e325] [cursor=pointer]
+                        - button "Move Gemini 3.1 Pro Low down" [ref=f2e326] [cursor=pointer]
+                        - button "Hide Gemini 3.1 Pro Low" [ref=f2e327] [cursor=pointer]
+                    - generic [ref=f2e328]:
+                      - generic [ref=f2e329]:
+                        - generic [ref=f2e330]: Claude Sonnet 4.6
+                        - button "Details for Claude Sonnet 4.6" [ref=f2e331] [cursor=pointer]
+                      - generic [ref=f2e332]:
+                        - button "Add Claude Sonnet 4.6 to favorites" [ref=f2e333] [cursor=pointer]
+                        - button "Move Claude Sonnet 4.6 up" [ref=f2e334] [cursor=pointer]
+                        - button "Move Claude Sonnet 4.6 down" [ref=f2e335] [cursor=pointer]
+                        - button "Hide Claude Sonnet 4.6" [ref=f2e336] [cursor=pointer]
+                    - generic [ref=f2e337]:
+                      - generic [ref=f2e338]:
+                        - generic [ref=f2e339]: Claude Opus 4.6 Thinking
+                        - button "Details for Claude Opus 4.6 Thinking" [ref=f2e340] [cursor=pointer]
+                      - generic [ref=f2e341]:
+                        - button "Add Claude Opus 4.6 Thinking to favorites" [ref=f2e342] [cursor=pointer]
+                        - button "Move Claude Opus 4.6 Thinking up" [ref=f2e343] [cursor=pointer]
+                        - button "Move Claude Opus 4.6 Thinking down" [ref=f2e344] [cursor=pointer]
+                        - button "Hide Claude Opus 4.6 Thinking" [ref=f2e345] [cursor=pointer]
+                    - generic [ref=f2e346]:
+                      - generic [ref=f2e347]:
+                        - generic [ref=f2e348]: GPT Oss 120b Medium
+                        - button "Details for GPT Oss 120b Medium" [ref=f2e349] [cursor=pointer]
+                      - generic [ref=f2e350]:
+                        - button "Add GPT Oss 120b Medium to favorites" [ref=f2e351] [cursor=pointer]
+                        - button "Move GPT Oss 120b Medium up" [ref=f2e352] [cursor=pointer]
+                        - button "Move GPT Oss 120b Medium down" [disabled]
+                        - button "Hide GPT Oss 120b Medium" [ref=f2e353] [cursor=pointer]
+                  - generic [ref=f2e354]:
+                    - textbox "gemini-3.6-flash-high" [ref=f2e356]
+                    - button "Add" [ref=f2e357] [cursor=pointer]
+            - generic [ref=f2e151]:
+              - generic [ref=f2e152]:
+                - heading "OpenCode" [level=3] [ref=f2e159]
+                - paragraph [ref=f2e160]:
+                  - generic [ref=f2e161]: Not found
+                  - generic [ref=f2e162]: "- OpenCode CLI (`opencode`) is not installed or not on PATH."
+              - generic [ref=f2e163]:
+                - button "Toggle OpenCode details" [ref=f2e164] [cursor=pointer]
+                - switch "Enable OpenCode" [checked] [ref=f2e165] [cursor=pointer]
+                - checkbox [checked] [ref=f2e166]
+            - generic [ref=f2e169]:
+              - generic [ref=f2e170]:
+                - generic [ref=f2e171]:
+                  - heading "Pi" [level=3] [ref=f2e177]
+                  - generic [ref=f2e178]: Personal Fork
+                  - code [ref=f2e215]: v0.82.0
+                - paragraph [ref=f2e179]:
+                  - generic [ref=f2e180]: Authenticated
+                  - generic [ref=f2e181]: "- 93 Pi models available."
+              - generic [ref=f2e182]:
+                - button "Toggle Pi details" [ref=f2e183] [cursor=pointer]
+                - switch "Enable Pi" [checked] [ref=f2e184] [cursor=pointer]
+                - checkbox [checked] [ref=f2e185]
+    - button "Toggle main sidebar" [pressed] [ref=f2e186] [cursor=pointer]:
+      - generic [ref=f2e187]: Toggle Sidebar
+  - generic:
+    - region "Notifications"
+  - generic:
+    - region "Notifications"
