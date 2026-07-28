@@ -29,9 +29,9 @@ export function ProposedPlanCard(props: { readonly proposedPlan: OrchestrationPr
         </Text>
         <Text className="font-t3-bold text-lg text-neutral-950 dark:text-neutral-50">{title}</Text>
         <Text className="text-xs text-neutral-500 dark:text-neutral-400">
-          {props.proposedPlan.status === "ready"
-            ? "Ready to implement from your laptop or phone."
-            : `Status: ${props.proposedPlan.status}`}
+          {props.proposedPlan.implementedAt
+            ? "Implemented."
+            : "Ready to implement from your laptop or phone."}
         </Text>
       </View>
       <Markdown>{preview}</Markdown>

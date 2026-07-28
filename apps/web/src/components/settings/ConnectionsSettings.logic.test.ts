@@ -81,7 +81,9 @@ describe("applyWslEnableSelection", () => {
 });
 
 function endpoint(
-  partial: Partial<AdvertisedEndpoint> & Pick<AdvertisedEndpoint, "id" | "httpBaseUrl">,
+  partial: Omit<Partial<AdvertisedEndpoint>, "compatibility"> & {
+    readonly compatibility?: Partial<AdvertisedEndpoint["compatibility"]>;
+  } & Pick<AdvertisedEndpoint, "id" | "httpBaseUrl">,
 ): AdvertisedEndpoint {
   return {
     provider: { id: "desktop-core", label: "Desktop", kind: "core", isAddon: false },
@@ -89,10 +91,15 @@ function endpoint(
     label: partial.label ?? "Endpoint",
     reachability: partial.reachability ?? "lan",
     status: partial.status ?? "available",
-    compatibility: partial.compatibility ?? {},
-    description: partial.description ?? null,
+    description: partial.description,
     isDefault: partial.isDefault ?? false,
     ...partial,
+    wsBaseUrl: partial.wsBaseUrl ?? partial.httpBaseUrl.replace(/^http/u, "ws"),
+    compatibility: {
+      hostedHttpsApp: "unknown",
+      desktopApp: "unknown",
+      ...partial.compatibility,
+    },
   };
 }
 

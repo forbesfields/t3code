@@ -147,9 +147,10 @@ export function useThreadOutboxDrain(): void {
         retry,
       });
       if (retry) {
+        const cause = Cause.squash(commandResult.cause);
         const errorMessage =
-          Cause.squash(commandResult.cause) instanceof Error
-            ? Cause.squash(commandResult.cause).message
+          cause instanceof Error
+            ? cause.message
             : "Queued message delivery failed. Retrying when the connection recovers.";
         const current = appAtomRegistry.get(threadOutboxDeliveryErrorAtom);
         appAtomRegistry.set(threadOutboxDeliveryErrorAtom, {

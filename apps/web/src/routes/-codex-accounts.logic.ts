@@ -18,7 +18,16 @@ export function parseCodexAuthAccountRows(output: string): CodexAccountRow[] {
     const match = line.match(accountRowPattern);
     if (!match) return [];
 
-    const [, active, number, account, plan, fiveHourUsage, weeklyUsage, lastActivity] = match;
+    const [
+      ,
+      active,
+      number = "",
+      account = "",
+      plan = "",
+      fiveHourUsage = "",
+      weeklyUsage = "",
+      lastActivity = "",
+    ] = match;
     const email = account.match(emailPattern)?.[0];
     if (!email) return [];
 

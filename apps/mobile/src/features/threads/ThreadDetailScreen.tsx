@@ -393,15 +393,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               list's bottom inset, so any padding above the pill/composer
               pushes the resting content floor up by the same amount. */}
           <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
-            <Animated.View
-              className="w-full self-center"
-              layout={LinearTransition.duration(220)}
-              style={{ maxWidth: contentMaxWidth }}
-            >
-              {props.activeWorkStartedAt ? (
-                <WorkingDurationPill startedAt={props.activeWorkStartedAt} />
-              ) : null}
-
+            <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
               {props.activePendingApprovals.length > 0 || props.activePendingUserInput ? (
                 <Animated.View
                   className="shrink-0 gap-3 px-4 pb-3"
@@ -429,7 +421,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   ) : null}
                 </Animated.View>
               ) : null}
-            </Animated.View>
+            </View>
 
             <ThreadComposer
               editorRef={composerEditorRef}

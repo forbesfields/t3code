@@ -10,6 +10,7 @@ const serverExposureState: DesktopServerExposureState = {
   advertisedHost: "192.168.1.10",
   endpointUrl: "http://192.168.1.10:37737",
   mode: "network-accessible",
+  tailscaleDiscoveryEnabled: false,
   tailscaleServeEnabled: false,
   tailscaleServePort: 443,
 };
