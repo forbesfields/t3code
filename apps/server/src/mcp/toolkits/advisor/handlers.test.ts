@@ -17,7 +17,6 @@ const invocation = (capabilities: ReadonlySet<"preview" | "advisor">) =>
     providerInstanceId: ProviderInstanceId.make("codex"),
     capabilities,
     issuedAt: 1,
-    expiresAt: 2,
   });
 
 describe("advisor_consult MCP handler", () => {

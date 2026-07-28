@@ -292,6 +292,7 @@ function createTextGeneration(
       Effect.succeed({
         title: "Update workflow",
       }),
+    generateAdvisorReview: () => Effect.die("advisor review is not used by GitManager tests"),
     ...overrides,
   };
 
@@ -340,7 +341,7 @@ function createTextGeneration(
             }),
         ),
       ),
-    generateAdvisorReview: () => Effect.die("advisor review is not used by GitManager tests"),
+    generateAdvisorReview: (input) => implementation.generateAdvisorReview(input),
   };
 }
 

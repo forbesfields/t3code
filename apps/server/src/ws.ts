@@ -1541,9 +1541,31 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "codex-auth" },
           ),
         [WS_METHODS.codingUsageGetReport]: (_input) =>
-          observeRpcEffect(WS_METHODS.codingUsageGetReport, getCodingUsageReport(), {
-            "rpc.aggregate": "coding-usage",
-          }),
+          observeRpcEffect(
+            WS_METHODS.codingUsageGetReport,
+            getCodingUsageReport().pipe(
+              Effect.catch((cause) =>
+                Effect.gen(function* () {
+                  return {
+                    daily: [],
+                    totals: {
+                      inputTokens: 0,
+                      outputTokens: 0,
+                      cacheReadTokens: 0,
+                      cacheCreationTokens: 0,
+                      totalTokens: 0,
+                      totalCost: 0,
+                    },
+                    machines: [],
+                    refreshedAt: DateTime.formatIso(yield* DateTime.now),
+                    refreshAfterMs: 30 * 60 * 1_000,
+                    error: cause instanceof Error ? cause.message : "Unable to read usage report.",
+                  };
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "coding-usage" },
+          ),
         [WS_METHODS.piRunCommand]: (input) =>
           observeRpcEffect(
             WS_METHODS.piRunCommand,
