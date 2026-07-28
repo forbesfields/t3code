@@ -81,6 +81,15 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     expect(decoded.providers.codex.enabled).toBe(true);
   });
 
+  it("defaults Antigravity to the official agy executable", () => {
+    const decoded = decodeServerSettings({});
+
+    expect(decoded.providers.antigravity).toMatchObject({
+      binaryPath: "agy",
+      enabled: true,
+    });
+  });
+
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {
     const decoded = decodeServerSettings({
       providerInstances: {

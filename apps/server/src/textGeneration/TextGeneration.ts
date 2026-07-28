@@ -14,6 +14,7 @@ export type TextGenerationProvider =
   | "claudeAgent"
   | "cursor"
   | "grok"
+  | "antigravity"
   | "opencode"
   | "pi";
 
