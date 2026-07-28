@@ -1,0 +1,105 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e6]:
+      - link "Go to threads" [ref=f1e8] [cursor=pointer]:
+        - /url: /
+        - img "T3" [ref=f1e9]
+        - generic [ref=f1e11]: Code
+      - generic [ref=f1e13]:
+        - list [ref=f1e15]:
+          - listitem [ref=f1e16]:
+            - button "Search ⌘K" [ref=f1e17] [cursor=pointer]:
+              - generic [ref=f1e21]: Search
+              - generic: ⌘K
+        - generic [ref=f1e22]:
+          - generic [ref=f1e23]:
+            - generic [ref=f1e24]: Projects
+            - generic [ref=f1e25]:
+              - button [ref=f1e26] [cursor=pointer]
+              - button "Add project" [ref=f1e30] [cursor=pointer]
+          - list
+          - generic [ref=f1e33]: No projects yet
+      - separator [ref=f1e34]
+      - list [ref=f1e36]:
+        - listitem [ref=f1e37]:
+          - button "Hermes" [ref=f1e38] [cursor=pointer]
+        - listitem [ref=f1e43]:
+          - button "Accounts" [ref=f1e44] [cursor=pointer]
+        - listitem [ref=f1e51]:
+          - button "Settings" [ref=f1e52] [cursor=pointer]
+      - button "Resize Sidebar" [ref=f1e57]
+    - main [ref=f1e58]:
+      - generic [ref=f1e59]:
+        - generic [ref=f1e60]:
+          - generic [ref=f1e61]:
+            - heading "Codex accounts" [level=1] [ref=f1e62]
+            - paragraph [ref=f1e63]: Uses your local codex-auth registry and switching rules.
+          - button "Refresh" [disabled]
+        - generic [ref=f1e66]:
+          - generic [ref=f1e67]:
+            - generic [ref=f1e68]:
+              - button "Log in account" [disabled]
+              - button "Show status" [disabled]
+            - paragraph [ref=f1e71]: Login opens the installed Codex authentication flow, then adds the authenticated account.
+          - generic [ref=f1e72]:
+            - generic [ref=f1e73]: Account selector
+            - generic [ref=f1e74]:
+              - textbox "Account selector" [ref=f1e76]:
+                - /placeholder: Email, alias, or row (01)
+              - button "Switch" [disabled]
+              - button "Remove" [disabled]
+            - paragraph [ref=f1e79]:
+              - text: "Row numbers from the table are supported:"
+              - code [ref=f1e80]: "01"
+              - text: and
+              - code [ref=f1e81]: "1"
+              - text: target the same account.
+          - generic [ref=f1e82]:
+            - generic [ref=f1e83]:
+              - generic [ref=f1e84]:
+                - heading "Account inventory" [level=2] [ref=f1e85]
+                - paragraph [ref=f1e86]: Select a row or use its numbered slot above.
+              - generic [ref=f1e87]: 0 saved
+            - paragraph [ref=f1e88]: Refresh to load the local codex-auth registry.
+          - generic [ref=f1e89]:
+            - generic [ref=f1e90]:
+              - heading "Smart switching" [level=2] [ref=f1e91]
+              - paragraph [ref=f1e92]: codex-auth switches when the active account reaches either usage threshold.
+            - generic [ref=f1e93]:
+              - generic [ref=f1e94]:
+                - text: 5 hour %
+                - textbox "5 hour %" [ref=f1e96]: "10"
+              - generic [ref=f1e97]:
+                - text: Weekly %
+                - textbox "Weekly %" [ref=f1e99]: "5"
+              - button "Save thresholds" [disabled]
+              - button "Enable" [disabled]
+              - button "Disable" [disabled]
+          - generic [ref=f1e103]:
+            - generic [ref=f1e104]:
+              - heading "Advanced" [level=2] [ref=f1e105]
+              - paragraph [ref=f1e106]: Run any codex-auth command, one argument per line. This covers import, export, aliases, cleanup, and API options.
+            - textbox [ref=f1e108]: list
+            - generic [ref=f1e109]:
+              - button "Run command" [disabled]
+          - generic [ref=f1e111]:
+            - heading "Command result" [level=2] [ref=f1e113]
+            - table [ref=f1e115]:
+              - rowgroup [ref=f1e116]:
+                - row [ref=f1e117]:
+                  - cell "forbes' MBP is not connected." [ref=f1e118]
+    - button "Toggle main sidebar" [pressed] [ref=f1e121] [cursor=pointer]:
+      - generic [ref=f1e122]: Toggle Sidebar
+  - generic:
+    - region "Notifications"
+  - generic:
+    - region "Notifications":
+      - dialog [ref=f1e123]:
+        - button "Dismiss notification" [ref=f1e125] [cursor=pointer]
+        - generic [ref=f1e129]:
+          - generic [ref=f1e139]:
+            - 'heading "Update Available: Claude v2.1.218" [level=2] [ref=f1e140]'
+            - paragraph [ref=f1e141]: Install the update now or review provider settings.
+          - generic [ref=f1e142]:
+            - button "Settings" [ref=f1e143] [cursor=pointer]
+            - button "Update" [ref=f1e144] [cursor=pointer]
