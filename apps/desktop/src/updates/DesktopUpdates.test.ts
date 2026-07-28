@@ -161,6 +161,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
         setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),
         setServerExposureMode: () => Effect.die("unexpected server exposure update"),
         setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
+        setTailscaleDiscoveryEnabled: () => Effect.die("unexpected Tailscale discovery update"),
         setUpdateChannel: () => Effect.fail(setUpdateChannelError),
         setWslBackendEnabled: () => Effect.die("unexpected WSL backend toggle"),
         setWslDistro: () => Effect.die("unexpected WSL distro change"),
