@@ -145,7 +145,6 @@ function UsageRoute() {
   const heatmapMaximum = Math.max(1, ...daily.map((row) => row.totalTokens));
   const cacheShare =
     summary.input + summary.cache === 0 ? 0 : summary.cache / (summary.input + summary.cache);
-  const detail = period === "today" ? "latest daily total" : "daily totals";
 
   return (
     <SidebarInset className="h-dvh min-h-0 bg-background text-foreground">
@@ -153,10 +152,6 @@ function UsageRoute() {
         <header className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-4">
           <div>
             <h1 className="text-sm font-semibold">Usage</h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              ccusage-omp • {report?.machines.join(" + ") || "loading machines"} • max once every 30
-              min
-            </p>
           </div>
           <span className="ml-auto text-xs text-muted-foreground">
             {report
@@ -188,7 +183,7 @@ function UsageRoute() {
                 <section className="flex flex-wrap items-end gap-8 border-b border-border pb-6">
                   <div>
                     <p className="text-xs text-muted-foreground">
-                      {rows.at(-1)?.period ?? "No usage yet"} · {detail}
+                      {rows.at(-1)?.period ?? "No usage yet"}
                     </p>
                     <h2 className="mt-1 text-4xl font-semibold tracking-tight">
                       {metric === "tokens"
@@ -229,7 +224,6 @@ function UsageRoute() {
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <h2 className="text-sm font-medium">All-time token activity</h2>
-                        <p className="mt-0.5 text-xs text-muted-foreground">One square per day</p>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span>Less</span>
@@ -263,7 +257,7 @@ function UsageRoute() {
                   <div className="mt-6">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-medium">Top five models</h2>
-                      <span className="text-xs text-muted-foreground">by tokens</span>
+                      <span className="text-xs text-muted-foreground">tokens</span>
                     </div>
                     <div className="border-t border-border">
                       {summary.models.map((model, index) => (
@@ -286,11 +280,6 @@ function UsageRoute() {
                     </div>
                   </div>
                 </section>
-
-                <p className="text-xs text-muted-foreground">
-                  Estimated cost uses ccusage’s reported cost plus configured fallback prices when a
-                  source reports $0.00.
-                </p>
               </>
             )}
           </main>
