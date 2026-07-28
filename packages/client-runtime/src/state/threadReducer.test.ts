@@ -247,6 +247,99 @@ describe("applyThreadDetailEvent", () => {
         expect(result.thread.modelSelection).toEqual(baseThread.modelSelection);
       }
     });
+
+    it("updates the orchestrator configuration", () => {
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 5,
+        occurredAt: "2026-04-01T05:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.meta-updated",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          advisor: {
+            config: {
+              modelSelection: {
+                instanceId: ProviderInstanceId.make("claude_review"),
+                model: "opus",
+              },
+              maxCorrectionAttempts: 2,
+            },
+            state: {
+              status: "idle",
+              correctionAttempts: 0,
+              activeTurnId: null,
+              blockers: [],
+              lastReview: null,
+              error: null,
+              updatedAt: "2026-04-01T05:00:00.000Z",
+            },
+          },
+          updatedAt: "2026-04-01T05:00:00.000Z",
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.advisor?.config.modelSelection).toMatchObject({
+          instanceId: "claude_review",
+          model: "opus",
+        });
+      }
+    });
+  });
+
+  describe("thread.advisor-state-set", () => {
+    it("projects live advisor review state", () => {
+      const advisor = {
+        config: {
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("claude_review"),
+            model: "opus",
+          },
+          maxCorrectionAttempts: 2,
+        },
+        state: {
+          status: "idle" as const,
+          correctionAttempts: 0,
+          activeTurnId: null,
+          blockers: [],
+          lastReview: null,
+          error: null,
+          updatedAt: "2026-04-01T05:00:00.000Z",
+        },
+      };
+      const result = applyThreadDetailEvent(
+        { ...baseThread, advisor },
+        {
+          ...baseEventFields,
+          sequence: 6,
+          occurredAt: "2026-04-01T06:00:00.000Z",
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-1"),
+          type: "thread.advisor-state-set",
+          payload: {
+            threadId: ThreadId.make("thread-1"),
+            state: {
+              ...advisor.state,
+              status: "waiting_for_input",
+              error: "Advisor unavailable",
+              updatedAt: "2026-04-01T06:00:00.000Z",
+            },
+            updatedAt: "2026-04-01T06:00:00.000Z",
+          },
+        },
+      );
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.advisor?.state).toMatchObject({
+          status: "waiting_for_input",
+          error: "Advisor unavailable",
+        });
+      }
+    });
   });
 
   describe("thread.message-sent", () => {

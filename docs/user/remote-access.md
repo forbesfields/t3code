@@ -20,15 +20,26 @@ There are two ways to expose your server for remote connections: from the deskto
 
 If you are already running the desktop app and want to make it reachable from other devices:
 
-1. Open **Settings** → **Connections**.
-2. Under **Manage Local Backend**, toggle **Network access** on. This will restart the app and run the backend on all network interfaces.
-3. The settings panel will show the default reachable endpoint, with a `+N` control when more endpoints are available. Expand it to inspect alternatives such as loopback, LAN, private-network, or HTTPS endpoints.
-4. Use **Create Link** to generate a pairing link you can share with another device.
+#### Phone / Tailnet access (recommended for iPhone)
+
+1. Open **Settings** → **Connections** → **This environment**.
+2. Click **Set up** on **Phone / Tailnet access**. T3 Code opts into Tailscale discovery and opens the Tailscale HTTPS setup dialog.
+3. Confirm setup. The desktop app restarts the backend with Tailscale Serve enabled.
+4. Under **Authorized clients**, use **Create link**, then scan the pairing QR on your iPhone.
+
+While the desktop app is open, Tailscale Serve stays active and your phone can reconnect to the same MagicDNS URL without re-pairing. Quitting the desktop app tears down Serve until you launch it again.
+
+Pairing links default to the Tailscale HTTPS MagicDNS endpoint when it is available, so phone pairing does not depend on LAN reachability.
+
+#### LAN network access (optional)
+
+1. Toggle **Network access** on. This restarts the app and runs the backend on all network interfaces.
+2. The settings panel will show the default reachable endpoint, with a `+N` control when more endpoints are available. Expand it to inspect alternatives such as loopback, LAN, private-network, or HTTPS endpoints.
+3. Use **Create Link** to generate a pairing link you can share with another device.
 
 The default endpoint controls the QR code and primary copy action for pairing links. You can change it from the expanded endpoint list. The preference is stored by endpoint type, so choosing the local LAN endpoint survives normal IP address changes when you move between networks.
 
-When no user default is saved, the app uses the built-in LAN endpoint for pairing links when
-available. You can set another endpoint as the default from the expanded endpoint list.
+When no user default is saved, the app prefers the Tailscale HTTPS MagicDNS endpoint for pairing links when available. Otherwise it uses the built-in LAN endpoint when network access is enabled. You can set another endpoint as the default from the expanded endpoint list.
 
 - HTTPS/WSS-compatible endpoints work from `https://app.t3.codes`, but are not made the default
   automatically.
@@ -210,3 +221,7 @@ Use `t3 auth --help` and the nested subcommand help pages for the full reference
 - Anyone with a valid pairing credential can create a session until that credential expires or is revoked.
 - Hosted pairing links keep the credential in the URL hash so it is not sent to the hosted app server, but it can still be exposed through browser history, screenshots, logs, or copy/paste.
 - Use `t3 auth` to revoke credentials or sessions you no longer trust.
+
+## Push notifications (later)
+
+T3 Code already projects agent-phase awareness (running, approval needed, done, failed) through a relay seam for optional push/Live Activities. A private Tailscale pairing does not require push for live control: keep the native mobile app connected or reopen it to approve prompts and continue sessions. Push can be enabled later without changing the server sync model.

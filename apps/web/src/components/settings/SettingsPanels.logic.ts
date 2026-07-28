@@ -41,6 +41,17 @@ export function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingM
   }
 }
 
+export function resolvePiMcpConfigPath(config: unknown, fallbackAgentDir: string): string | null {
+  const configuredAgentDir =
+    config !== null &&
+    typeof config === "object" &&
+    typeof (config as Record<string, unknown>).agentDir === "string"
+      ? ((config as Record<string, unknown>).agentDir as string).trim()
+      : "";
+  const agentDir = configuredAgentDir || fallbackAgentDir.trim();
+  return agentDir ? `${agentDir.replace(/[\\/]+$/, "")}/mcp.json` : null;
+}
+
 function collapseOtelSignalsUrl(input: {
   readonly tracesUrl: string;
   readonly metricsUrl: string;

@@ -4,6 +4,18 @@ const path = require("node:path");
 const { withDangerousMod } = require("expo/config-plugins");
 
 const MARKER = "# t3code: repair cached CocoaPods UUID allocation before SPM integration";
+const SANDBOXING_MARKER =
+  "# t3code: disable user script sandboxing for CocoaPods xcframework copies";
+const SANDBOXING_REPAIR = `${SANDBOXING_MARKER}
+    installer.pods_project.build_configurations.each do |configuration|
+      configuration.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+    end
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |configuration|
+        configuration.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      end
+    end
+`;
 const UUID_REPAIR = `${MARKER}
     pods_project = installer.pods_project
     existing_uuids = pods_project.objects.map(&:uuid)
@@ -33,6 +45,16 @@ module.exports = function withIosCocoaPodsUuidCache(config) {
       const podfile = fs.readFileSync(podfilePath, "utf8");
 
       if (podfile.includes(MARKER)) {
+        if (!podfile.includes(SANDBOXING_MARKER)) {
+          fs.writeFileSync(
+            podfilePath,
+            podfile.replace(
+              /Pod::UI\.puts "T3Code: reset CocoaPods UUID allocator[^\n]*\n/,
+              (match) => `${match}${SANDBOXING_REPAIR}`,
+            ),
+            "utf8",
+          );
+        }
         return nextConfig;
       }
 
@@ -43,7 +65,7 @@ module.exports = function withIosCocoaPodsUuidCache(config) {
 
       fs.writeFileSync(
         podfilePath,
-        podfile.replace(postInstallStart, `${postInstallStart}${UUID_REPAIR}`),
+        podfile.replace(postInstallStart, `${postInstallStart}${UUID_REPAIR}${SANDBOXING_REPAIR}`),
         "utf8",
       );
       return nextConfig;

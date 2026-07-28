@@ -10,6 +10,7 @@ import {
   formatDiagnosticsDescription,
   isProjectGroupingEnabled,
   projectGroupingModeFromToggle,
+  resolvePiMcpConfigPath,
 } from "./SettingsPanels.logic";
 
 describe("project grouping toggle", () => {
@@ -24,6 +25,20 @@ describe("project grouping toggle", () => {
   it("restores repository path grouping when the toggle is cycled", () => {
     expect(projectGroupingModeFromToggle(false, "repository_path")).toBe("separate");
     expect(projectGroupingModeFromToggle(true, "repository_path")).toBe("repository_path");
+  });
+});
+
+describe("resolvePiMcpConfigPath", () => {
+  it("uses the instance agent directory and falls back to Pi settings", () => {
+    expect(
+      resolvePiMcpConfigPath(
+        { agentDir: "/Users/example/.pi-work/agent/" },
+        "/Users/example/.pi/agent",
+      ),
+    ).toBe("/Users/example/.pi-work/agent/mcp.json");
+    expect(resolvePiMcpConfigPath({}, "/Users/example/.pi/agent")).toBe(
+      "/Users/example/.pi/agent/mcp.json",
+    );
   });
 });
 

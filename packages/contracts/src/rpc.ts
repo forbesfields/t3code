@@ -125,6 +125,11 @@ import {
   ServerSelfUpdateError,
   ServerSelfUpdateInput,
   ServerSelfUpdateResult,
+  CodingUsageReport,
+  CodexAuthCommandRunInput,
+  CodexAuthCommandRunResult,
+  PiCommandRunInput,
+  PiCommandRunResult,
   ServerTraceDiagnosticsResult,
   ServerProcessDiagnosticsResult,
   ServerProcessResourceHistoryInput,
@@ -228,6 +233,9 @@ export const WS_METHODS = {
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
+  codexAuthRunCommand: "codexAuth.runCommand",
+  codingUsageGetReport: "codingUsage.getReport",
+  piRunCommand: "pi.runCommand",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
@@ -320,6 +328,24 @@ export const WsServerUpdateServerRpc = Rpc.make(WS_METHODS.serverUpdateServer, {
   payload: ServerSelfUpdateInput,
   success: ServerSelfUpdateResult,
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
+});
+
+export const WsCodexAuthRunCommandRpc = Rpc.make(WS_METHODS.codexAuthRunCommand, {
+  payload: CodexAuthCommandRunInput,
+  success: CodexAuthCommandRunResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsCodingUsageGetReportRpc = Rpc.make(WS_METHODS.codingUsageGetReport, {
+  payload: Schema.Struct({}),
+  success: CodingUsageReport,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsPiRunCommandRpc = Rpc.make(WS_METHODS.piRunCommand, {
+  payload: PiCommandRunInput,
+  success: PiCommandRunResult,
+  error: EnvironmentAuthorizationError,
 });
 
 export const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
@@ -809,6 +835,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsServerUpdateServerRpc,
+  WsCodexAuthRunCommandRpc,
+  WsCodingUsageGetReportRpc,
+  WsPiRunCommandRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,

@@ -181,6 +181,7 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        supportsAdvisorReview: true,
         snapshot,
         adapter,
         textGeneration,

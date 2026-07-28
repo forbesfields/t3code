@@ -347,6 +347,30 @@ export function createServerEnvironmentAtoms<R, E>(
       scheduler: configScheduler,
       concurrency: configConcurrency,
     }),
+    codexAuthRunCommand: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:codex-auth:run-command",
+      tag: WS_METHODS.codexAuthRunCommand,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+    codingUsageGetReport: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:coding-usage:get-report",
+      tag: WS_METHODS.codingUsageGetReport,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+    runPiCommand: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pi:run-command",
+      tag: WS_METHODS.piRunCommand,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
     upsertKeybinding: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:upsert-keybinding",
       tag: WS_METHODS.serverUpsertKeybinding,

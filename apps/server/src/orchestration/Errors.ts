@@ -79,6 +79,20 @@ export class OrchestrationListenerCallbackError extends Schema.TaggedErrorClass<
   }
 }
 
+export class AdvisorReviewError extends Schema.TaggedErrorClass<AdvisorReviewError>()(
+  "AdvisorReviewError",
+  {
+    threadId: Schema.String,
+    stage: Schema.Literals(["initial", "recovery", "final"]),
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return `Advisor review failed for ${this.threadId} (${this.stage}): ${this.detail}`;
+  }
+}
+
 export type OrchestrationDispatchError =
   | ProjectionRepositoryError
   | OrchestrationCommandInvariantError

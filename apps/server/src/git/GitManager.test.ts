@@ -340,6 +340,7 @@ function createTextGeneration(
             }),
         ),
       ),
+    generateAdvisorReview: () => Effect.die("advisor review is not used by GitManager tests"),
   };
 }
 

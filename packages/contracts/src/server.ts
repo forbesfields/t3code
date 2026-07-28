@@ -78,8 +78,82 @@ export const ServerProviderSlashCommand = Schema.Struct({
   name: TrimmedNonEmptyString,
   description: Schema.optional(TrimmedNonEmptyString),
   input: Schema.optional(ServerProviderSlashCommandInput),
+  /** Pi distinguishes immediate extension commands from prompt/skill expansion. */
+  source: Schema.optional(Schema.Literals(["extension", "prompt", "skill"])),
 });
 export type ServerProviderSlashCommand = typeof ServerProviderSlashCommand.Type;
+
+export const PiCommandRunInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  command: TrimmedNonEmptyString,
+  cwd: Schema.optional(TrimmedNonEmptyString),
+});
+export type PiCommandRunInput = typeof PiCommandRunInput.Type;
+
+export const PiCommandNotification = Schema.Struct({
+  message: TrimmedNonEmptyString,
+  type: Schema.Literals(["info", "warning", "error"]),
+});
+export type PiCommandNotification = typeof PiCommandNotification.Type;
+
+export const PiCommandRunResult = Schema.Struct({
+  notifications: Schema.Array(PiCommandNotification),
+  error: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type PiCommandRunResult = typeof PiCommandRunResult.Type;
+
+/** Executes an installed `codex-auth` command without a shell. */
+export const CodexAuthCommandRunInput = Schema.Struct({
+  args: Schema.Array(TrimmedNonEmptyString),
+});
+export type CodexAuthCommandRunInput = typeof CodexAuthCommandRunInput.Type;
+
+export const CodexAuthCommandRunResult = Schema.Struct({
+  exitCode: Schema.NullOr(NonNegativeInt),
+  output: Schema.String,
+  error: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type CodexAuthCommandRunResult = typeof CodexAuthCommandRunResult.Type;
+
+export const CodingUsageModel = Schema.Struct({
+  modelName: Schema.String,
+  inputTokens: NonNegativeInt,
+  outputTokens: NonNegativeInt,
+  cacheReadTokens: NonNegativeInt,
+  cacheCreationTokens: NonNegativeInt,
+  totalTokens: NonNegativeInt,
+  cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+export type CodingUsageModel = typeof CodingUsageModel.Type;
+
+export const CodingUsageDay = Schema.Struct({
+  period: Schema.String,
+  inputTokens: NonNegativeInt,
+  outputTokens: NonNegativeInt,
+  cacheReadTokens: NonNegativeInt,
+  cacheCreationTokens: NonNegativeInt,
+  totalTokens: NonNegativeInt,
+  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  modelBreakdowns: Schema.Array(CodingUsageModel),
+});
+export type CodingUsageDay = typeof CodingUsageDay.Type;
+
+export const CodingUsageReport = Schema.Struct({
+  daily: Schema.Array(CodingUsageDay),
+  totals: Schema.Struct({
+    inputTokens: NonNegativeInt,
+    outputTokens: NonNegativeInt,
+    cacheReadTokens: NonNegativeInt,
+    cacheCreationTokens: NonNegativeInt,
+    totalTokens: NonNegativeInt,
+    totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  }),
+  machines: Schema.Array(Schema.String),
+  refreshedAt: Schema.String,
+  refreshAfterMs: NonNegativeInt,
+  error: Schema.NullOr(Schema.String),
+});
+export type CodingUsageReport = typeof CodingUsageReport.Type;
 
 export const ServerProviderSkill = Schema.Struct({
   name: TrimmedNonEmptyString,
@@ -186,6 +260,7 @@ export const ServerProvider = Schema.Struct({
   continuation: Schema.optional(ServerProviderContinuation),
   showInteractionModeToggle: Schema.optional(Schema.Boolean),
   requiresNewThreadForModelChange: Schema.optional(Schema.Boolean),
+  supportsAdvisorReview: Schema.optional(Schema.Boolean),
   enabled: Schema.Boolean,
   installed: Schema.Boolean,
   version: Schema.NullOr(TrimmedNonEmptyString),

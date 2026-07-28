@@ -8,6 +8,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
+  type EnvironmentId,
   type MessageId,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
@@ -46,6 +47,15 @@ export const dispatchingQueuedMessageIdAtom = Atom.make<MessageId | null>(null).
   Atom.keepAlive,
   Atom.withLabel("mobile:thread-outbox:dispatching-message-id"),
 );
+
+export const threadOutboxDeliveryErrorAtom = Atom.make<Record<string, string>>({}).pipe(
+  Atom.keepAlive,
+  Atom.withLabel("mobile:thread-outbox:delivery-error"),
+);
+
+function threadOutboxErrorKey(environmentId: EnvironmentId, threadId: string): string {
+  return `${environmentId}:${threadId}`;
+}
 
 function beginDispatchingQueuedMessage(queuedMessageId: MessageId): void {
   appAtomRegistry.set(dispatchingQueuedMessageIdAtom, queuedMessageId);
@@ -136,6 +146,17 @@ export function useThreadOutboxDrain(): void {
         cause: commandResult.cause,
         retry,
       });
+      if (retry) {
+        const errorMessage =
+          Cause.squash(commandResult.cause) instanceof Error
+            ? Cause.squash(commandResult.cause).message
+            : "Queued message delivery failed. Retrying when the connection recovers.";
+        const current = appAtomRegistry.get(threadOutboxDeliveryErrorAtom);
+        appAtomRegistry.set(threadOutboxDeliveryErrorAtom, {
+          ...current,
+          [threadOutboxErrorKey(queuedMessage.environmentId, queuedMessage.threadId)]: errorMessage,
+        });
+      }
       return retry;
     };
     const completeDelivery = async (
@@ -147,6 +168,13 @@ export function useThreadOutboxDrain(): void {
 
       try {
         await removeThreadOutboxMessage(queuedMessage);
+        const current = appAtomRegistry.get(threadOutboxDeliveryErrorAtom);
+        const key = threadOutboxErrorKey(queuedMessage.environmentId, queuedMessage.threadId);
+        if (current[key]) {
+          const next = { ...current };
+          delete next[key];
+          appAtomRegistry.set(threadOutboxDeliveryErrorAtom, next);
+        }
         return true;
       } catch (error) {
         console.warn("[thread-outbox] failed to remove delivered queued message", {

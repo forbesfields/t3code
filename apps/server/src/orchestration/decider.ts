@@ -1,5 +1,7 @@
 import {
   EventId,
+  type OrchestrationAdvisor,
+  type OrchestrationAdvisorConfig,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
@@ -140,6 +142,27 @@ function threadHasQueuedTurnStart(
     latestUserMessageAtMs > latestTurnAtMs &&
     Math.abs(queuedAgeMs) <= QUEUED_TURN_START_GRACE_MS
   );
+}
+
+function makeAdvisor(
+  config: OrchestrationAdvisorConfig,
+  updatedAt: string,
+  previous?: OrchestrationAdvisor | null,
+): OrchestrationAdvisor {
+  return {
+    config,
+    state: previous
+      ? { ...previous.state, error: null, updatedAt }
+      : {
+          status: "idle",
+          correctionAttempts: 0,
+          activeTurnId: null,
+          blockers: [],
+          lastReview: null,
+          error: null,
+          updatedAt,
+        },
+  };
 }
 
 function withEventBase(
@@ -368,6 +391,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           projectId: command.projectId,
           title: command.title,
           modelSelection: command.modelSelection,
+          advisor:
+            command.advisorConfig === undefined || command.advisorConfig === null
+              ? null
+              : makeAdvisor(command.advisorConfig, command.createdAt),
           runtimeMode: command.runtimeMode,
           interactionMode: command.interactionMode,
           branch: command.branch,
@@ -643,6 +670,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ? thread.branch
           : command.branch;
       const occurredAt = yield* nowIso;
+      if (command.advisorConfig !== undefined && thread.advisor?.state.status === "reviewing") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "The orchestrator model cannot change while a review is running.",
+        });
+      }
+      const advisor =
+        command.advisorConfig === undefined
+          ? undefined
+          : command.advisorConfig === null
+            ? null
+            : makeAdvisor(command.advisorConfig, occurredAt, thread.advisor);
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -657,6 +696,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.modelSelection !== undefined
             ? { modelSelection: command.modelSelection }
             : {}),
+          ...(advisor !== undefined ? { advisor } : {}),
           ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
           updatedAt: occurredAt,
@@ -940,6 +980,40 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.advisor.respond": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (!thread.advisor) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' does not have orchestrated mode enabled.`,
+        });
+      }
+      if (thread.advisor.state.status !== "waiting_for_input") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' is not waiting for an orchestrator decision.`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.advisor-response-requested",
+        payload: {
+          threadId: command.threadId,
+          action: command.action,
+          createdAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.session.set": {
       const thread = yield* requireThread({
         readModel,
@@ -1166,6 +1240,34 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       return [unsettledEvent, activityAppendedEvent];
+    }
+
+    case "thread.advisor-state.set": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (!thread.advisor) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' does not have orchestrated mode enabled.`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.advisor-state-set",
+        payload: {
+          threadId: command.threadId,
+          state: command.state,
+          updatedAt: command.createdAt,
+        },
+      };
     }
 
     default: {

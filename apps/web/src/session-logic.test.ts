@@ -1576,6 +1576,52 @@ describe("deriveWorkLogEntries context window handling", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.label).toBe("Context compacted");
   });
+
+  it("projects advisor review activity into an inline review-card entry", () => {
+    const entries = deriveWorkLogEntries([
+      makeActivity({
+        id: "advisor-review-1",
+        turnId: "turn-1",
+        kind: "advisor.review",
+        summary: "Final orchestrator review: fix",
+        tone: "approval",
+        payload: {
+          review: {
+            id: "review-1",
+            turnId: "turn-1",
+            stage: "final",
+            verdict: "fix",
+            summary: "One blocker remains.",
+            instruction: "Run the restart test.",
+            evidenceSummary: "Diff captured; restart output missing.",
+            blockers: [
+              {
+                id: "blocker-1",
+                requirement: "Verify restart recovery",
+                evidenceRequired: "Passing integration test output",
+                status: "open",
+              },
+            ],
+            attempt: 1,
+            createdAt: "2026-07-21T00:00:00.000Z",
+            completedAt: "2026-07-21T00:00:01.000Z",
+          },
+          modelSelection: { instanceId: "claude_review", model: "opus" },
+          status: "waiting_for_input",
+        },
+      }),
+    ]);
+
+    expect(entries[0]).toMatchObject({
+      advisorReview: {
+        stage: "final",
+        verdict: "fix",
+        attempt: 1,
+      },
+      advisorModelSelection: { instanceId: "claude_review", model: "opus" },
+      advisorStatus: "waiting_for_input",
+    });
+  });
 });
 
 describe("isLatestTurnSettled", () => {
@@ -1610,6 +1656,12 @@ describe("isLatestTurnSettled", () => {
         activeTurnId: null,
       }),
     ).toBe(true);
+  });
+
+  it("does not settle an orchestrated turn until the final gate is approved", () => {
+    expect(isLatestTurnSettled(latestTurn, null, { status: "reviewing" })).toBe(false);
+    expect(isLatestTurnSettled(latestTurn, null, { status: "waiting_for_input" })).toBe(false);
+    expect(isLatestTurnSettled(latestTurn, null, { status: "approved" })).toBe(true);
   });
 
   it("returns false when turn timestamps are incomplete", () => {

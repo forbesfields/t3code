@@ -282,6 +282,9 @@ export class DesktopServerExposure extends Context.Service<
       readonly enabled: boolean;
       readonly port?: number;
     }) => Effect.Effect<DesktopServerExposureChange, DesktopTailscaleServePersistenceError>;
+    readonly setTailscaleDiscoveryEnabled: (
+      enabled: boolean,
+    ) => Effect.Effect<DesktopServerExposureChange, DesktopTailscaleServePersistenceError>;
     readonly getAdvertisedEndpoints: Effect.Effect<readonly AdvertisedEndpoint[]>;
   }
 >()("@t3tools/desktop/backend/DesktopServerExposure") {}
@@ -298,6 +301,7 @@ interface RuntimeState {
   readonly advertisedHost: Option.Option<string>;
   readonly tailscaleServeEnabled: boolean;
   readonly tailscaleServePort: number;
+  readonly tailscaleDiscoveryEnabled: boolean;
 }
 
 interface ResolvedRuntimeState {
@@ -323,6 +327,7 @@ const toContractState = (state: RuntimeState): DesktopServerExposureState => ({
   advertisedHost: Option.getOrNull(state.advertisedHost),
   tailscaleServeEnabled: state.tailscaleServeEnabled,
   tailscaleServePort: state.tailscaleServePort,
+  tailscaleDiscoveryEnabled: state.tailscaleDiscoveryEnabled,
 });
 
 const toBackendConfig = (state: RuntimeState): DesktopServerExposureBackendConfig => ({
@@ -360,6 +365,7 @@ function runtimeStateFromResolvedExposure(input: {
     advertisedHost: Option.fromNullishOr(input.exposure.advertisedHost),
     tailscaleServeEnabled: input.settings.tailscaleServeEnabled,
     tailscaleServePort: input.settings.tailscaleServePort,
+    tailscaleDiscoveryEnabled: input.settings.tailscaleDiscoveryEnabled,
   };
 }
 
@@ -512,6 +518,7 @@ export const make = Effect.gen(function* () {
         ...current,
         tailscaleServeEnabled: result.settings.tailscaleServeEnabled,
         tailscaleServePort: result.settings.tailscaleServePort,
+        tailscaleDiscoveryEnabled: result.settings.tailscaleDiscoveryEnabled,
       }));
 
       return {
@@ -520,6 +527,32 @@ export const make = Effect.gen(function* () {
       };
     },
   );
+
+  const setTailscaleDiscoveryEnabled = Effect.fn(
+    "desktop.serverExposure.setTailscaleDiscoveryEnabled",
+  )(function* (enabled: boolean) {
+    yield* Effect.annotateCurrentSpan({ enabled });
+    const result = yield* desktopSettings.setTailscaleDiscoveryEnabled(enabled).pipe(
+      Effect.mapError(
+        (cause) =>
+          new DesktopTailscaleServePersistenceError({
+            enabled,
+            port: null,
+            cause,
+          }),
+      ),
+    );
+
+    const nextState = yield* Ref.updateAndGet(stateRef, (current) => ({
+      ...current,
+      tailscaleDiscoveryEnabled: result.settings.tailscaleDiscoveryEnabled,
+    }));
+
+    return {
+      state: toContractState(nextState),
+      requiresRelaunch: false,
+    };
+  });
 
   const getAdvertisedEndpoints = Effect.gen(function* () {
     const state = yield* Ref.get(stateRef);
@@ -530,10 +563,14 @@ export const make = Effect.gen(function* () {
       customHttpsEndpointUrls: config.desktopHttpsEndpointUrls,
     });
 
-    // Don't spawn the Tailscale CLI when the user hasn't opted into any
-    // network exposure. The spawn itself triggers a macOS "Other apps"
-    // TCC prompt on Mac App Store Tailscale builds.
-    if (state.mode !== "network-accessible" && !state.tailscaleServeEnabled) {
+    // Don't spawn the Tailscale CLI until the user opts into phone/tailnet
+    // access or broader network exposure. The spawn itself triggers a macOS
+    // "Other apps" TCC prompt on Mac App Store Tailscale builds.
+    if (
+      state.mode !== "network-accessible" &&
+      !state.tailscaleServeEnabled &&
+      !state.tailscaleDiscoveryEnabled
+    ) {
       return coreEndpoints;
     }
 
@@ -556,6 +593,7 @@ export const make = Effect.gen(function* () {
     configureFromSettings,
     setMode,
     setTailscaleServeEnabled,
+    setTailscaleDiscoveryEnabled,
     getAdvertisedEndpoints,
   });
 });

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+import * as NodeFS from "node:fs";
+
+if (process.env.PI_TEST_ARGS_PATH) {
+  NodeFS.writeFileSync(process.env.PI_TEST_ARGS_PATH, JSON.stringify(process.argv.slice(2)));
+}
+
 let buffer = "";
 
 function send(value) {
@@ -31,6 +37,17 @@ process.stdin.on("data", (chunk) => {
         data: { provider: command.provider, id: command.modelId },
       });
     } else if (command.type === "prompt") {
+      if (command.message === "/status") {
+        send({
+          type: "extension_ui_request",
+          id: "notify-status",
+          method: "notify",
+          message: "Pi status is ready",
+          notifyType: "info",
+        });
+        send({ id: command.id, type: "response", command: "prompt", success: true });
+        continue;
+      }
       send({ id: command.id, type: "response", command: "prompt", success: true });
       send({
         type: "message_update",

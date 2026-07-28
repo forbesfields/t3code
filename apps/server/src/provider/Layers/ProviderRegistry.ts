@@ -181,7 +181,12 @@ const correlateSnapshotWithSource = (
       ),
     );
   }
-  return Effect.succeed(snapshot);
+  return Effect.succeed({
+    ...snapshot,
+    ...(source.supportsAdvisorReview !== undefined
+      ? { supportsAdvisorReview: source.supportsAdvisorReview }
+      : {}),
+  });
 };
 
 /**
@@ -201,6 +206,9 @@ const snapshotInstanceKey = (provider: ServerProvider): ProviderInstanceId => {
 const buildSnapshotSource = (instance: ProviderInstance): ProviderSnapshotSource => ({
   instanceId: instance.instanceId,
   driverKind: instance.driverKind,
+  ...(instance.supportsAdvisorReview !== undefined
+    ? { supportsAdvisorReview: instance.supportsAdvisorReview }
+    : {}),
   getSnapshot: instance.snapshot.getSnapshot,
   refresh: instance.snapshot.refresh,
   streamChanges: instance.snapshot.streamChanges,

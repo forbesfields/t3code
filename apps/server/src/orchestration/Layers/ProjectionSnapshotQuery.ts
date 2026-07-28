@@ -5,6 +5,7 @@ import {
   MessageId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
+  OrchestrationAdvisor,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
@@ -78,6 +79,7 @@ const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    advisor: Schema.NullOr(Schema.fromJsonString(OrchestrationAdvisor)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -326,6 +328,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           title,
           model_selection_json AS "modelSelection",
+          advisor_json AS "advisor",
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           branch,
@@ -358,6 +361,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           title,
           model_selection_json AS "modelSelection",
+          advisor_json AS "advisor",
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           branch,
@@ -392,6 +396,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           title,
           model_selection_json AS "modelSelection",
+          advisor_json AS "advisor",
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           branch,
@@ -758,6 +763,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           project_id AS "projectId",
           title,
           model_selection_json AS "modelSelection",
+          advisor_json AS "advisor",
           runtime_mode AS "runtimeMode",
           interaction_mode AS "interactionMode",
           branch,
@@ -1194,6 +1200,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 projectId: row.projectId,
                 title: row.title,
                 modelSelection: row.modelSelection,
+                advisor: row.advisor,
                 runtimeMode: row.runtimeMode,
                 interactionMode: row.interactionMode,
                 branch: row.branch,
@@ -1396,6 +1403,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   projectId: row.projectId,
                   title: row.title,
                   modelSelection: row.modelSelection,
+                  advisor: row.advisor,
                   runtimeMode: row.runtimeMode,
                   interactionMode: row.interactionMode,
                   branch: row.branch,
@@ -1529,6 +1537,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                       projectId: row.projectId,
                       title: row.title,
                       modelSelection: row.modelSelection,
+                      advisor: row.advisor,
                       runtimeMode: row.runtimeMode,
                       interactionMode: row.interactionMode,
                       branch: row.branch,
@@ -1544,7 +1553,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                       session: sessionByThread.get(row.threadId) ?? null,
                       latestUserMessageAt: row.latestUserMessageAt,
                       hasPendingApprovals: row.pendingApprovalCount > 0,
-                      hasPendingUserInput: row.pendingUserInputCount > 0,
+                      hasPendingUserInput:
+                        row.pendingUserInputCount > 0 ||
+                        row.advisor?.state.status === "waiting_for_input",
                       hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
                     } satisfies OrchestrationThreadShell)
                   : Result.failVoid,
@@ -1667,6 +1678,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   projectId: row.projectId,
                   title: row.title,
                   modelSelection: row.modelSelection,
+                  advisor: row.advisor,
                   runtimeMode: row.runtimeMode,
                   interactionMode: row.interactionMode,
                   branch: row.branch,
@@ -1682,7 +1694,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   session: sessionByThread.get(row.threadId) ?? null,
                   latestUserMessageAt: row.latestUserMessageAt,
                   hasPendingApprovals: row.pendingApprovalCount > 0,
-                  hasPendingUserInput: row.pendingUserInputCount > 0,
+                  hasPendingUserInput:
+                    row.pendingUserInputCount > 0 ||
+                    row.advisor?.state.status === "waiting_for_input",
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
                 }),
               ),
@@ -1911,6 +1925,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         projectId: threadRow.value.projectId,
         title: threadRow.value.title,
         modelSelection: threadRow.value.modelSelection,
+        advisor: threadRow.value.advisor,
         runtimeMode: threadRow.value.runtimeMode,
         interactionMode: threadRow.value.interactionMode,
         branch: threadRow.value.branch,
@@ -1926,7 +1941,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         session: Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null,
         latestUserMessageAt: threadRow.value.latestUserMessageAt,
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
-        hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
+        hasPendingUserInput:
+          threadRow.value.pendingUserInputCount > 0 ||
+          threadRow.value.advisor?.state.status === "waiting_for_input",
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
       } satisfies OrchestrationThreadShell);
     });
@@ -2009,6 +2026,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         projectId: threadRow.value.projectId,
         title: threadRow.value.title,
         modelSelection: threadRow.value.modelSelection,
+        advisor: threadRow.value.advisor,
         runtimeMode: threadRow.value.runtimeMode,
         interactionMode: threadRow.value.interactionMode,
         branch: threadRow.value.branch,

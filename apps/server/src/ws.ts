@@ -24,6 +24,7 @@ import {
   CommandId,
   type DiscoveredLocalServerList,
   EventId,
+  PiSettings,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -65,6 +66,8 @@ import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/uns
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
+import { runCodexAuthCommand } from "./codexAuth.ts";
+import { getCodingUsageReport } from "./codingUsage.ts";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
@@ -81,6 +84,7 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import { runPiCommand } from "./provider/pi/PiAdapter.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -122,6 +126,7 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const decodePiSettings = Schema.decodeUnknownEffect(PiSettings);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const EDITOR_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -312,6 +317,9 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateServer, AuthOrchestrationOperateScope],
+  [WS_METHODS.codexAuthRunCommand, AuthOrchestrationOperateScope],
+  [WS_METHODS.codingUsageGetReport, AuthOrchestrationReadScope],
+  [WS_METHODS.piRunCommand, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpsertKeybinding, AuthOrchestrationOperateScope],
   [WS_METHODS.serverRemoveKeybinding, AuthOrchestrationOperateScope],
   [WS_METHODS.serverGetSettings, AuthOrchestrationReadScope],
@@ -1515,6 +1523,70 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverUpdateServer, serverSelfUpdate.update(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.codexAuthRunCommand]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.codexAuthRunCommand,
+            runCodexAuthCommand(input.args).pipe(
+              Effect.catch((cause) =>
+                Effect.succeed({
+                  exitCode: null,
+                  output: "",
+                  error:
+                    cause instanceof Error && cause.message
+                      ? cause.message
+                      : "Could not start codex-auth.",
+                }),
+              ),
+            ),
+            { "rpc.aggregate": "codex-auth" },
+          ),
+        [WS_METHODS.codingUsageGetReport]: (_input) =>
+          observeRpcEffect(WS_METHODS.codingUsageGetReport, getCodingUsageReport(), {
+            "rpc.aggregate": "coding-usage",
+          }),
+        [WS_METHODS.piRunCommand]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.piRunCommand,
+            Effect.gen(function* () {
+              if (!input.command.startsWith("/")) {
+                return { notifications: [], error: "Pi commands must start with /." };
+              }
+              const settings = yield* serverSettings.getSettings.pipe(
+                Effect.orElseSucceed(() => null),
+              );
+              if (settings === null) {
+                return { notifications: [], error: "Could not read Pi settings." };
+              }
+              const instance = settings.providerInstances[input.instanceId];
+              if (instance !== undefined && instance.driver !== "pi") {
+                return { notifications: [], error: "The selected provider is not Pi." };
+              }
+              const piSettings = yield* decodePiSettings(
+                instance?.config ?? settings.providers.pi,
+              ).pipe(Effect.orElseSucceed(() => null));
+              if (piSettings === null) {
+                return { notifications: [], error: "Pi settings are invalid." };
+              }
+              const environment = Object.fromEntries(
+                (instance?.environment ?? []).map((entry) => [entry.name, entry.value]),
+              );
+              return yield* Effect.promise(() =>
+                runPiCommand({
+                  settings: piSettings,
+                  cwd: input.cwd ?? config.cwd,
+                  environment,
+                  command: input.command,
+                }).then(
+                  (result) => ({ ...result, error: null }),
+                  (cause) => ({
+                    notifications: [],
+                    error: cause instanceof Error ? cause.message : "Failed to run Pi command.",
+                  }),
+                ),
+              );
+            }),
+            { "rpc.aggregate": "pi" },
+          ),
         [WS_METHODS.serverUpsertKeybinding]: (rule) =>
           observeRpcEffect(
             WS_METHODS.serverUpsertKeybinding,

@@ -1,11 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
-import { BotIcon, SettingsIcon } from "lucide-react";
-import { memo, useCallback } from "react";
+import { ActivityIcon, BotIcon, SettingsIcon, UsersIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { APP_STAGE_LABEL } from "../../branding";
 import { cn } from "../../lib/utils";
-import { primaryServerConfigAtom } from "../../state/server";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { primaryServerConfigAtom, serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { resolveSidebarStageBadgeLabel } from "../Sidebar.logic";
 import { SidebarStageBackdrop, resolveSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
 import {
@@ -100,6 +102,12 @@ function T3Wordmark() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+  const environmentId = usePrimaryEnvironmentId();
+  const getUsage = useAtomCommand(serverEnvironment.codingUsageGetReport, { reportFailure: false });
+  const [usage, setUsage] = useState<{
+    readonly totalTokens: number;
+    readonly totalCost: number;
+  } | null>(null);
   const handleSettingsClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -112,6 +120,29 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     }
     void navigate({ to: "/hermes" });
   }, [isMobile, navigate, setOpenMobile]);
+  const handleCodexAccountsClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/codex-accounts" });
+  }, [isMobile, navigate, setOpenMobile]);
+  const handleUsageClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/usage" });
+  }, [isMobile, navigate, setOpenMobile]);
+
+  useEffect(() => {
+    if (environmentId === null) return;
+    void getUsage({ environmentId, input: {} }).then((result) => {
+      if (result._tag !== "Success") return;
+      const today = result.value.daily.at(-1);
+      if (today) {
+        setUsage({ totalTokens: today.totalTokens, totalCost: today.totalCost });
+      }
+    });
+  }, [environmentId, getUsage]);
 
   return (
     <SidebarFooter className="p-2">
@@ -121,11 +152,38 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
+            className="h-auto items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+            onClick={handleUsageClick}
+          >
+            <ActivityIcon className="size-4.5 shrink-0" />
+            <span className="grid text-left">
+              <span>Today</span>
+              {usage ? (
+                <span className="text-[11px] font-normal text-sidebar-muted-foreground">
+                  {(usage.totalTokens / 1_000_000).toFixed(1)}M · ${usage.totalCost.toFixed(2)}
+                </span>
+              ) : null}
+            </span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
             className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
             onClick={handleHermesClick}
           >
             <BotIcon className="size-4.5 shrink-0" />
             <span>Hermes</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
+            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+            onClick={handleCodexAccountsClick}
+          >
+            <UsersIcon className="size-4.5 shrink-0" />
+            <span>Accounts</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>

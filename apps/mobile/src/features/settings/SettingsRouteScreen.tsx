@@ -117,6 +117,11 @@ function LocalSettingsRouteScreen() {
             value={`${environmentCount}`}
             target="SettingsEnvironments"
           />
+          <SettingsRow
+            icon="person.2.badge.gearshape"
+            label="Codex Accounts"
+            target="SettingsCodexAccounts"
+          />
         </SettingsSection>
 
         <GeneralSettingsSection />
@@ -469,6 +474,11 @@ function ConfiguredSettingsRouteScreen() {
             label="Environments"
             value={`${environmentCount}`}
             target="SettingsEnvironments"
+          />
+          <SettingsRow
+            icon="person.2.badge.gearshape"
+            label="Codex Accounts"
+            target="SettingsCodexAccounts"
           />
           <SettingsSwitchRow
             icon="bell.badge"

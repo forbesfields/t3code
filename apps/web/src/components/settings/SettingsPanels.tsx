@@ -42,6 +42,7 @@ import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { isElectron } from "../../env";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
+import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
 import { useTheme } from "../../hooks/useTheme";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
@@ -57,10 +58,12 @@ import {
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import {
+  primaryServerAvailableEditorsAtom,
   primaryServerObservabilityAtom,
   primaryServerProvidersAtom,
   serverEnvironment,
 } from "../../state/server";
+import { shellEnvironment } from "../../state/shell";
 import { usePrimaryEnvironment } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
@@ -88,6 +91,7 @@ import {
   projectGroupingModeFromToggle,
   readLastEnabledProjectGroupingMode,
   rememberEnabledProjectGroupingMode,
+  resolvePiMcpConfigPath,
 } from "./SettingsPanels.logic";
 import {
   SettingResetButton,
@@ -1100,11 +1104,15 @@ export function ProviderSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
   const primaryEnvironment = usePrimaryEnvironment();
   const refreshServerProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
+    reportFailure: false,
+  });
+  const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
@@ -1214,6 +1222,38 @@ export function ProviderSettingsPanel() {
       });
     },
     [primaryEnvironment, updateProvider],
+  );
+
+  const openMcpConfig = useCallback(
+    (path: string) => {
+      const editor = resolveAndPersistPreferredEditor(availableEditors);
+      if (!editor || !primaryEnvironment) {
+        toastManager.add({
+          type: "error",
+          title: "Could not open Pi MCP config",
+          description: editor ? "No environment is selected." : "No available editors found.",
+        });
+        return;
+      }
+
+      void (async () => {
+        const result = await openInEditor({
+          environmentId: primaryEnvironment.environmentId,
+          input: { cwd: path, editor },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not open Pi MCP config",
+              description: error instanceof Error ? error.message : "Unable to open mcp.json.",
+            }),
+          );
+        }
+      })();
+    },
+    [availableEditors, openInEditor, primaryEnvironment],
   );
 
   interface InstanceRow {
@@ -1464,6 +1504,10 @@ export function ProviderSettingsPanel() {
             favorite.provider === row.instanceId ? Result.succeed(favorite.model) : Result.failVoid,
           );
           const resetLabel = driverOption?.label ?? String(row.driver);
+          const mcpConfigPath =
+            row.driver === "pi"
+              ? resolvePiMcpConfigPath(row.instance.config, settings.providers.pi.agentDir)
+              : null;
           const headerAction =
             row.isDefault && row.isDirty ? (
               <SettingResetButton
@@ -1529,6 +1573,10 @@ export function ProviderSettingsPanel() {
                   : undefined
               }
               isUpdating={showInlineUpdateButton ? isDriverUpdateRunning : undefined}
+              mcpConfigPath={mcpConfigPath ?? undefined}
+              onOpenMcpConfig={
+                mcpConfigPath === null ? undefined : () => openMcpConfig(mcpConfigPath)
+              }
             />
           );
         })}

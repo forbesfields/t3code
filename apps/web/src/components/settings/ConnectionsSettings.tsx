@@ -41,7 +41,13 @@ import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { cn } from "../../lib/utils";
 import { formatElapsedDurationLabel, formatExpiresInLabel } from "../../timestampFormat";
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
-import { applyWslEnableSelection } from "./ConnectionsSettings.logic";
+import {
+  applyWslEnableSelection,
+  endpointDefaultPreferenceKey,
+  isTailscaleHttpsEndpoint,
+  resolveTailscaleServeControlState,
+  selectPairingEndpoint,
+} from "./ConnectionsSettings.logic";
 import {
   SettingsPageContainer,
   SettingsRow,
@@ -425,55 +431,6 @@ function toDesktopClientSessionRecord(clientSession: AuthClientSession): ServerC
         ? null
         : DateTime.formatIso(clientSession.lastConnectedAt),
   };
-}
-
-function selectPairingEndpoint(
-  endpoints: ReadonlyArray<AdvertisedEndpoint>,
-  defaultEndpointKey?: string | null,
-): AdvertisedEndpoint | null {
-  const availableEndpoints = endpoints.filter((endpoint) => endpoint.status !== "unavailable");
-  if (defaultEndpointKey) {
-    const selectedEndpoint = availableEndpoints.find(
-      (endpoint) => endpointDefaultPreferenceKey(endpoint) === defaultEndpointKey,
-    );
-    if (selectedEndpoint) {
-      return selectedEndpoint;
-    }
-  }
-  return (
-    availableEndpoints.find((endpoint) => endpoint.isDefault) ??
-    availableEndpoints.find((endpoint) => endpoint.reachability !== "loopback") ??
-    availableEndpoints.find((endpoint) => endpoint.compatibility.hostedHttpsApp === "compatible") ??
-    null
-  );
-}
-
-function isTailscaleHttpsEndpoint(endpoint: AdvertisedEndpoint): boolean {
-  return endpoint.id.startsWith("tailscale-magicdns:");
-}
-
-function endpointDefaultPreferenceKey(endpoint: AdvertisedEndpoint): string {
-  if (endpoint.id.startsWith("desktop-loopback:")) {
-    return "desktop-core:loopback:http";
-  }
-  if (endpoint.id.startsWith("desktop-lan:")) {
-    return "desktop-core:lan:http";
-  }
-  if (endpoint.id.startsWith("tailscale-ip:")) {
-    return "tailscale:ip:http";
-  }
-  if (isTailscaleHttpsEndpoint(endpoint)) {
-    return "tailscale:magicdns:https";
-  }
-
-  let scheme = "unknown";
-  try {
-    scheme = new URL(endpoint.httpBaseUrl).protocol.replace(/:$/u, "");
-  } catch {
-    // Keep the stored preference stable even if a custom endpoint is malformed.
-  }
-
-  return `${endpoint.provider.id}:${endpoint.reachability}:${scheme}:${endpoint.label}`;
 }
 
 function resolveAdvertisedEndpointPairingUrl(
@@ -2032,6 +1989,47 @@ export function ConnectionsSettings() {
     }
   }, [desktopBridge, desktopServerExposureState?.tailscaleServePort]);
 
+  const handleStartPhoneTailnetAccess = useCallback(async () => {
+    if (!desktopBridge) return;
+    setIsUpdatingTailscaleServe(true);
+    setDesktopServerExposureMutationError(null);
+    try {
+      await desktopBridge.setTailscaleDiscoveryEnabled(true);
+      refreshDesktopNetworkAccessState();
+      const endpoints = await desktopBridge.getAdvertisedEndpoints();
+      const magicDnsEndpoint = endpoints.find(isTailscaleHttpsEndpoint) ?? null;
+      if (magicDnsEndpoint) {
+        handleStartTailscaleServeSetup(magicDnsEndpoint);
+        return;
+      }
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Tailscale not available",
+          description:
+            "Install Tailscale on this Mac and make sure you are signed in to your tailnet.",
+        }),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to prepare phone access over Tailscale.";
+      setDesktopServerExposureMutationError(message);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not prepare phone access",
+          description: message,
+        }),
+      );
+    } finally {
+      setIsUpdatingTailscaleServe(false);
+    }
+  }, [desktopBridge, handleStartTailscaleServeSetup]);
+
+  const handleRetryTailscaleServeVerification = useCallback(() => {
+    refreshDesktopNetworkAccessState();
+  }, []);
+
   const handleStartTailscaleServeDisable = useCallback((_endpoint: AdvertisedEndpoint) => {
     setDisableTailscaleServeDialogOpen(true);
   }, []);
@@ -2310,24 +2308,25 @@ export function ConnectionsSettings() {
     [tailscaleHttpsEndpoint, visibleDesktopNetworkAdvertisedEndpoints],
   );
   const isLocalBackendRemotelyReachable =
-    isLocalBackendNetworkAccessible || tailscaleHttpsEndpoint?.status === "available";
+    isLocalBackendNetworkAccessible ||
+    desktopServerExposureState?.tailscaleServeEnabled === true ||
+    tailscaleHttpsEndpoint?.status === "available";
   const defaultDesktopNetworkAdvertisedEndpoint = useMemo(
     () =>
       selectPairingEndpoint(visibleDesktopNetworkAdvertisedEndpoints, defaultAdvertisedEndpointKey),
     [defaultAdvertisedEndpointKey, visibleDesktopNetworkAdvertisedEndpoints],
   );
   const defaultDesktopAdvertisedEndpoint = useMemo(
-    () =>
-      defaultDesktopNetworkAdvertisedEndpoint ??
-      selectPairingEndpoint(
-        tailscaleHttpsEndpoint ? [tailscaleHttpsEndpoint] : [],
-        defaultAdvertisedEndpointKey,
-      ),
-    [defaultAdvertisedEndpointKey, defaultDesktopNetworkAdvertisedEndpoint, tailscaleHttpsEndpoint],
+    () => selectPairingEndpoint(visibleDesktopAdvertisedEndpoints, defaultAdvertisedEndpointKey),
+    [defaultAdvertisedEndpointKey, visibleDesktopAdvertisedEndpoints],
   );
   const defaultDesktopAdvertisedEndpointKey = defaultDesktopAdvertisedEndpoint
     ? endpointDefaultPreferenceKey(defaultDesktopAdvertisedEndpoint)
     : null;
+  const tailscaleServeControlState = resolveTailscaleServeControlState({
+    tailscaleServeEnabled: desktopServerExposureState?.tailscaleServeEnabled === true,
+    endpointStatus: tailscaleHttpsEndpoint?.status ?? null,
+  });
   const handleSetDefaultAdvertisedEndpoint = useCallback(
     (endpoint: AdvertisedEndpoint) => {
       setDefaultAdvertisedEndpointKey(endpointDefaultPreferenceKey(endpoint));
@@ -2863,34 +2862,114 @@ export function ConnectionsSettings() {
     );
   };
 
-  const renderTailscaleRow = () => (
-    <SettingsRow
-      title="Tailscale HTTPS"
-      description={
-        tailscaleHttpsEndpoint
-          ? tailscaleHttpsEndpoint.status === "available"
-            ? tailscaleHttpsEndpoint.httpBaseUrl
-            : "Use Tailscale Serve to expose this backend through a MagicDNS HTTPS URL."
-          : "Start Tailscale to set up HTTPS access through MagicDNS."
-      }
-      control={
-        tailscaleHttpsEndpoint ? (
-          <Switch
-            checked={tailscaleHttpsEndpoint.status === "available"}
-            disabled={isUpdatingTailscaleServe}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                handleStartTailscaleServeSetup(tailscaleHttpsEndpoint);
-                return;
-              }
-              handleStartTailscaleServeDisable(tailscaleHttpsEndpoint);
-            }}
-            aria-label="Enable Tailscale HTTPS"
-          />
-        ) : null
-      }
-    />
-  );
+  const renderTailscaleRow = () => {
+    const phonePairingUrl =
+      defaultDesktopAdvertisedEndpoint &&
+      isTailscaleHttpsEndpoint(defaultDesktopAdvertisedEndpoint) &&
+      tailscaleServeControlState === "on"
+        ? defaultDesktopAdvertisedEndpoint.httpBaseUrl
+        : null;
+
+    return (
+      <>
+        <SettingsRow
+          title="Phone / Tailnet access"
+          description={
+            tailscaleServeControlState === "on"
+              ? (tailscaleHttpsEndpoint?.httpBaseUrl ??
+                "Reachable from your iPhone over Tailscale while this app is open.")
+              : tailscaleServeControlState === "verifying"
+                ? "Tailscale HTTPS is enabled and verifying. Pairing links use your MagicDNS URL once ready."
+                : "Expose this backend over Tailscale HTTPS so your phone can pair and reconnect while the desktop app is open."
+          }
+          status={
+            tailscaleServeControlState === "verifying" ? (
+              <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Enabled, verifying Tailscale HTTPS…</span>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={handleRetryTailscaleServeVerification}
+                  disabled={isUpdatingTailscaleServe}
+                >
+                  <RefreshCwIcon className="size-3" />
+                  Retry
+                </Button>
+              </span>
+            ) : null
+          }
+          control={
+            tailscaleServeControlState === "off" ? (
+              <Button
+                size="xs"
+                variant="default"
+                disabled={isUpdatingTailscaleServe}
+                onClick={() => void handleStartPhoneTailnetAccess()}
+              >
+                {isUpdatingTailscaleServe ? (
+                  <>
+                    <Spinner className="size-3.5" />
+                    Preparing…
+                  </>
+                ) : (
+                  "Set up"
+                )}
+              </Button>
+            ) : (
+              <Switch
+                checked={desktopServerExposureState?.tailscaleServeEnabled === true}
+                disabled={isUpdatingTailscaleServe}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    if (tailscaleHttpsEndpoint) {
+                      handleStartTailscaleServeSetup(tailscaleHttpsEndpoint);
+                    } else {
+                      void handleStartPhoneTailnetAccess();
+                    }
+                    return;
+                  }
+                  if (tailscaleHttpsEndpoint) {
+                    handleStartTailscaleServeDisable(tailscaleHttpsEndpoint);
+                  } else {
+                    setDisableTailscaleServeDialogOpen(true);
+                  }
+                }}
+                aria-label="Enable phone access over Tailscale HTTPS"
+              />
+            )
+          }
+        />
+        {phonePairingUrl ? (
+          <div className="border-t border-border/60 bg-muted/15 px-4 py-4">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+              <div className="rounded-xl border border-border/60 bg-background p-3">
+                <QRCodeSvg
+                  value={phonePairingUrl}
+                  size={168}
+                  level="M"
+                  marginSize={2}
+                  title="Phone pairing endpoint — scan after creating a pairing link"
+                />
+              </div>
+              <div className="min-w-0 space-y-2 text-center sm:text-left">
+                <p className="text-sm font-medium text-foreground">Pair your iPhone</p>
+                <p className="text-xs text-muted-foreground">
+                  Create a pairing link below, then scan its QR code on your phone. This endpoint
+                  stays available while the desktop app is open.
+                </p>
+                <p
+                  className="truncate text-xs font-mono text-muted-foreground"
+                  title={phonePairingUrl}
+                >
+                  {phonePairingUrl}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
+  };
   const renderAuthorizedClients = (presentation: AccessSectionPresentation) => (
     <>
       {desktopAccessManagementError ? (

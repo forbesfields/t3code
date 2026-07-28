@@ -6,6 +6,7 @@ import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
 import type { ThreadFeedActivity } from "../../lib/threadActivity";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { AdvisorReviewCard } from "./AdvisorReviewCard";
 
 const WORK_LOG_LAYOUT_ANIMATION = {
   duration: 180,
@@ -84,6 +85,8 @@ export function ThreadWorkLog(props: {
   readonly iconSubtleColor: import("react-native").ColorValue;
   readonly onCopyRow: (rowId: string, value: string) => void;
   readonly onToggleRow: (rowId: string) => void;
+  readonly onAdvisorAction?: (action: "retry" | "bypass" | "stop") => void;
+  readonly respondingAdvisorAction?: boolean;
 }) {
   const colorScheme = useColorScheme();
   const pressedBackground = colorScheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.035)";
@@ -107,6 +110,20 @@ export function ThreadWorkLog(props: {
 
       <View className="gap-px">
         {rows.map((row) => {
+          if (row.advisorReview && props.onAdvisorAction) {
+            return (
+              <View key={row.id} className="mb-3">
+                <AdvisorReviewCard
+                  review={row.advisorReview}
+                  model={row.advisorModel}
+                  status={row.advisorStatus}
+                  onAction={props.onAdvisorAction}
+                  responding={props.respondingAdvisorAction}
+                />
+              </View>
+            );
+          }
+
           const expanded = props.expandedRows[row.id] ?? false;
           const canExpand = row.canExpand;
           const fullDetail = expanded ? row.getFullDetail() : null;

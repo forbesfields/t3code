@@ -50,6 +50,7 @@ export interface ThreadDetailScreenProps {
   readonly environmentLabel: string | null;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
   readonly activeWorkStartedAt: string | null;
+  readonly activePendingApprovals: ReadonlyArray<PendingApproval>;
   readonly activePendingApproval: PendingApproval | null;
   readonly respondingApprovalId: ApprovalRequestId | null;
   readonly activePendingUserInput: PendingUserInput | null;
@@ -66,6 +67,7 @@ export interface ThreadDetailScreenProps {
   readonly projectWorkspaceRoot: string | null;
   readonly threadCwd: string | null;
   readonly selectedThreadQueueCount: number;
+  readonly outboxDeliveryError?: string | null;
   readonly serverConfig: T3ServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
@@ -96,6 +98,8 @@ export interface ThreadDetailScreenProps {
     customAnswer: string,
   ) => void;
   readonly onSubmitUserInput: () => Promise<unknown>;
+  readonly onAdvisorAction?: (action: "retry" | "bypass" | "stop") => void;
+  readonly respondingAdvisorAction?: boolean;
   readonly showContent?: boolean;
 }
 
@@ -371,6 +375,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             usesAutomaticContentInsets={props.usesAutomaticContentInsets}
             onHeaderMaterialVisibilityChange={props.onHeaderMaterialVisibilityChange}
             skills={selectedProviderSkills}
+            onAdvisorAction={props.onAdvisorAction}
+            respondingAdvisorAction={props.respondingAdvisorAction}
           />
         </View>
       ) : (
@@ -387,20 +393,29 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               list's bottom inset, so any padding above the pill/composer
               pushes the resting content floor up by the same amount. */}
           <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
-            <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
-              {props.activePendingApproval || props.activePendingUserInput ? (
+            <Animated.View
+              className="w-full self-center"
+              layout={LinearTransition.duration(220)}
+              style={{ maxWidth: contentMaxWidth }}
+            >
+              {props.activeWorkStartedAt ? (
+                <WorkingDurationPill startedAt={props.activeWorkStartedAt} />
+              ) : null}
+
+              {props.activePendingApprovals.length > 0 || props.activePendingUserInput ? (
                 <Animated.View
                   className="shrink-0 gap-3 px-4 pb-3"
                   entering={FadeInDown.duration(220)}
                   exiting={FadeOut.duration(140)}
                 >
-                  {props.activePendingApproval ? (
+                  {props.activePendingApprovals.map((approval) => (
                     <PendingApprovalCard
-                      approval={props.activePendingApproval}
+                      key={approval.requestId}
+                      approval={approval}
                       respondingApprovalId={props.respondingApprovalId}
                       onRespond={props.onRespondToApproval}
                     />
-                  ) : null}
+                  ))}
                   {props.activePendingUserInput ? (
                     <PendingUserInputCard
                       pendingUserInput={props.activePendingUserInput}
@@ -414,7 +429,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   ) : null}
                 </Animated.View>
               ) : null}
-            </View>
+            </Animated.View>
 
             <ThreadComposer
               editorRef={composerEditorRef}
@@ -429,6 +444,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               selectedThread={props.selectedThread}
               serverConfig={props.serverConfig}
               queueCount={props.selectedThreadQueueCount}
+              outboxDeliveryError={props.outboxDeliveryError}
               activeThreadBusy={props.activeThreadBusy}
               environmentId={props.environmentId}
               projectCwd={props.projectWorkspaceRoot}

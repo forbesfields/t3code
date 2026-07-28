@@ -15,6 +15,7 @@ import {
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
   ThreadActivityAppendedPayload,
+  ThreadAdvisorStateSetPayload,
   ThreadArchivedPayload,
   ThreadCreatedPayload,
   ThreadDeletedPayload,
@@ -282,6 +283,7 @@ export function projectEvent(
             projectId: payload.projectId,
             title: payload.title,
             modelSelection: payload.modelSelection,
+            ...(payload.advisor !== undefined ? { advisor: payload.advisor } : {}),
             runtimeMode: payload.runtimeMode,
             interactionMode: payload.interactionMode,
             branch: payload.branch,
@@ -402,6 +404,7 @@ export function projectEvent(
             ...(payload.modelSelection !== undefined
               ? { modelSelection: payload.modelSelection }
               : {}),
+            ...(payload.advisor !== undefined ? { advisor: payload.advisor } : {}),
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
             updatedAt: payload.updatedAt,
@@ -747,6 +750,30 @@ export function projectEvent(
           };
         }),
       );
+
+    case "thread.advisor-state-set":
+      return decodeForEvent(
+        ThreadAdvisorStateSetPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: nextBase.threads.map((thread) =>
+            thread.id === payload.threadId && thread.advisor
+              ? {
+                  ...thread,
+                  advisor: { ...thread.advisor, state: payload.state },
+                  updatedAt: payload.updatedAt,
+                }
+              : thread,
+          ),
+        })),
+      );
+
+    case "thread.advisor-response-requested":
+      return Effect.succeed(nextBase);
 
     default:
       return Effect.succeed(nextBase);

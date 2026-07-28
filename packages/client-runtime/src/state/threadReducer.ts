@@ -64,6 +64,7 @@ export function applyThreadDetailEvent(
           projectId: event.payload.projectId,
           title: event.payload.title,
           modelSelection: event.payload.modelSelection,
+          ...(event.payload.advisor !== undefined ? { advisor: event.payload.advisor } : {}),
           runtimeMode: event.payload.runtimeMode,
           interactionMode: event.payload.interactionMode,
           branch: event.payload.branch,
@@ -158,6 +159,7 @@ export function applyThreadDetailEvent(
           ...(event.payload.modelSelection !== undefined
             ? { modelSelection: event.payload.modelSelection }
             : {}),
+          ...(event.payload.advisor !== undefined ? { advisor: event.payload.advisor } : {}),
           ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
           ...(event.payload.worktreePath !== undefined
             ? { worktreePath: event.payload.worktreePath }
@@ -518,7 +520,20 @@ export function applyThreadDetailEvent(
       };
     }
 
+    case "thread.advisor-state-set":
+      return thread.advisor
+        ? {
+            kind: "updated",
+            thread: {
+              ...thread,
+              advisor: { ...thread.advisor, state: event.payload.state },
+              updatedAt: event.payload.updatedAt,
+            },
+          }
+        : { kind: "unchanged" };
+
     // ── Events that don't mutate thread state directly ──────────────
+    case "thread.advisor-response-requested":
     case "thread.approval-response-requested":
     case "thread.user-input-response-requested":
     case "thread.checkpoint-revert-requested":

@@ -20,6 +20,12 @@ T3 Connect is optional and disabled in a fresh clone. Public configuration belon
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
 [`../../.env.example`](../../.env.example).
 
+## Remote access over Tailscale
+
+Pair the dev client to your desktop environment using the MagicDNS HTTPS URL from **Settings → Connections → Phone / Tailnet access** on the Mac app. Prefer `https://machine.tailnet.ts.net` over a raw `100.x` Tailscale IP so reconnect survives IP changes.
+
+Pair from **Settings → Environments → Add environment** by scanning the desktop pairing QR.
+
 ## Development
 
 Start Metro for the dev client:

@@ -2,6 +2,7 @@ import type {
   ApprovalRequestId,
   EnvironmentId,
   ModelSelection,
+  OrchestrationAdvisorConfig,
   PreviewAnnotationPayload,
   ProviderApprovalDecision,
   ProviderInteractionMode,
@@ -615,6 +616,7 @@ export interface ChatComposerProps {
   ) => void;
 
   onProviderModelSelect: (instanceId: ProviderInstanceId, model: string) => void;
+  onAdvisorConfigChange: (config: OrchestrationAdvisorConfig | null) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -747,6 +749,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (store) => store.syncPersistedAttachments,
   );
   const getComposerDraft = useComposerDraftStore((store) => store.getComposerDraft);
+  const setComposerAdvisorConfig = useComposerDraftStore((store) => store.setAdvisorConfig);
 
   // ------------------------------------------------------------------
   // Model state
@@ -946,6 +949,63 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? selectedModelForPicker
       : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
   }, [modelOptionsByInstance, selectedInstanceId, selectedModelForPicker, selectedProvider]);
+  const advisorSelection = useMemo<ModelSelection | null>(() => {
+    const persisted =
+      composerDraft.advisorModelSelection ?? activeThread?.advisor?.config.modelSelection ?? null;
+    if (
+      persisted &&
+      providerInstanceEntries.some(
+        (entry) =>
+          entry.instanceId === persisted.instanceId &&
+          entry.snapshot.supportsAdvisorReview === true,
+      )
+    ) {
+      return persisted;
+    }
+    const entry =
+      providerInstanceEntries.find(
+        (candidate) =>
+          candidate.instanceId === selectedInstanceId &&
+          candidate.snapshot.supportsAdvisorReview === true,
+      ) ??
+      providerInstanceEntries.find(
+        (candidate) => candidate.snapshot.supportsAdvisorReview === true,
+      );
+    const model = entry ? modelOptionsByInstance.get(entry.instanceId)?.[0]?.slug : undefined;
+    return entry && model ? createModelSelection(entry.instanceId, model) : null;
+  }, [
+    composerDraft.advisorModelSelection,
+    activeThread?.advisor?.config.modelSelection,
+    modelOptionsByInstance,
+    providerInstanceEntries,
+    selectedInstanceId,
+  ]);
+  const composerAdvisorEnabled =
+    composerDraft.orchestrated ||
+    (composerDraft.advisorModelSelection === null &&
+      activeThread?.advisor !== undefined &&
+      activeThread.advisor !== null);
+  const advisorReviewRunning = activeThread?.advisor?.state.status === "reviewing";
+  const getAdvisorModelDisabledReason = useCallback(
+    (instanceId: ProviderInstanceId, _model: string): string | null => {
+      const entry = providerInstanceEntries.find(
+        (candidate) => candidate.instanceId === instanceId,
+      );
+      if (!entry?.snapshot.supportsAdvisorReview) {
+        return "This provider instance does not support isolated advisor reviews.";
+      }
+      return null;
+    },
+    [providerInstanceEntries],
+  );
+  const handleAdvisorSelection = useCallback(
+    (instanceId: ProviderInstanceId, model: string) => {
+      const modelSelection = createModelSelection(instanceId, model);
+      setComposerAdvisorConfig(composerDraftTarget, true, modelSelection);
+      props.onAdvisorConfigChange({ modelSelection, maxCorrectionAttempts: 2 });
+    },
+    [composerDraftTarget, props, setComposerAdvisorConfig],
+  );
 
   // ------------------------------------------------------------------
   // Context window
@@ -3112,29 +3172,79 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     No provider available
                   </Button>
                 ) : (
-                  <ProviderModelPicker
-                    compact={isComposerFooterCompact}
-                    activeInstanceId={selectedInstanceId}
-                    model={selectedModelForPickerWithCustomFallback}
-                    lockedProvider={lockedProvider}
-                    lockedContinuationGroupKey={lockedContinuationGroupKey}
-                    instanceEntries={providerInstanceEntries}
-                    keybindings={keybindings}
-                    modelOptionsByInstance={modelOptionsByInstance}
-                    terminalOpen={terminalOpen}
-                    open={isComposerModelPickerOpen}
-                    {...(composerProviderState.modelPickerIconClassName
-                      ? {
-                          activeProviderIconClassName:
-                            composerProviderState.modelPickerIconClassName,
-                        }
-                      : {})}
-                    onOpenChange={(open) => {
-                      setIsComposerModelPickerOpen(open);
-                    }}
-                    getModelDisabledReason={getModelDisabledReason}
-                    onInstanceModelChange={onProviderModelSelect}
-                  />
+                  <>
+                    <Button
+                      size="sm"
+                      variant={composerAdvisorEnabled ? "secondary" : "ghost"}
+                      aria-pressed={composerAdvisorEnabled}
+                      disabled={advisorReviewRunning || advisorSelection === null}
+                      className="shrink-0 gap-1.5 px-2 text-xs"
+                      onClick={() => {
+                        const enabled = !composerAdvisorEnabled;
+                        setComposerAdvisorConfig(composerDraftTarget, enabled, advisorSelection);
+                        props.onAdvisorConfigChange(
+                          enabled && advisorSelection
+                            ? { modelSelection: advisorSelection, maxCorrectionAttempts: 2 }
+                            : null,
+                        );
+                      }}
+                    >
+                      <BotIcon className="size-3.5" />
+                      Orchestrated
+                    </Button>
+
+                    <div className="flex shrink-0 items-center gap-1">
+                      {composerAdvisorEnabled ? (
+                        <span className="pl-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Worker
+                        </span>
+                      ) : null}
+                      <ProviderModelPicker
+                        compact={isComposerFooterCompact}
+                        activeInstanceId={selectedInstanceId}
+                        model={selectedModelForPickerWithCustomFallback}
+                        lockedProvider={lockedProvider}
+                        lockedContinuationGroupKey={lockedContinuationGroupKey}
+                        instanceEntries={providerInstanceEntries}
+                        keybindings={keybindings}
+                        modelOptionsByInstance={modelOptionsByInstance}
+                        terminalOpen={terminalOpen}
+                        open={isComposerModelPickerOpen}
+                        {...(composerProviderState.modelPickerIconClassName
+                          ? {
+                              activeProviderIconClassName:
+                                composerProviderState.modelPickerIconClassName,
+                            }
+                          : {})}
+                        onOpenChange={(open) => {
+                          setIsComposerModelPickerOpen(open);
+                        }}
+                        getModelDisabledReason={getModelDisabledReason}
+                        onInstanceModelChange={onProviderModelSelect}
+                      />
+                    </div>
+
+                    {composerAdvisorEnabled && advisorSelection ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className="pl-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Orchestrator
+                        </span>
+                        <ProviderModelPicker
+                          compact={isComposerFooterCompact}
+                          activeInstanceId={advisorSelection.instanceId}
+                          model={advisorSelection.model}
+                          lockedProvider={null}
+                          instanceEntries={providerInstanceEntries}
+                          keybindings={keybindings}
+                          modelOptionsByInstance={modelOptionsByInstance}
+                          terminalOpen={terminalOpen}
+                          disabled={advisorReviewRunning}
+                          getModelDisabledReason={getAdvisorModelDisabledReason}
+                          onInstanceModelChange={handleAdvisorSelection}
+                        />
+                      </div>
+                    ) : null}
+                  </>
                 )}
 
                 {isComposerFooterCompact ? (

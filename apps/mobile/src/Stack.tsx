@@ -43,6 +43,7 @@ import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
 import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
 import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
+import { SettingsCodexAccountsRouteScreen } from "./features/settings/SettingsCodexAccountsRouteScreen";
 import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteScreen";
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
@@ -180,6 +181,13 @@ const SettingsSheetStack = createNativeStackNavigator({
       linking: "client-storage",
       options: {
         title: "Client Storage",
+      },
+    }),
+    SettingsCodexAccounts: createNativeStackScreen({
+      screen: SettingsCodexAccountsRouteScreen,
+      linking: "codex-accounts",
+      options: {
+        title: "Codex Accounts",
       },
     }),
     SettingsAuth: createNativeStackScreen({
