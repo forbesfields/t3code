@@ -109,6 +109,8 @@ export const migrationEntries = [
   [40, "ProjectionProjectFaviconPath", Migration0040],
   [41, "AuthSessionClientConnection", Migration0041],
   [42, "ProjectionThreadAdvisor", Migration0042],
+  // Fork databases already used migration 35; rerun its idempotent repair at the next free ID.
+  [43, "RepairProjectionThreadTitleRegeneration", Migration0035],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
