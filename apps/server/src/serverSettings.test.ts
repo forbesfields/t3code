@@ -12,8 +12,10 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfig from "./config.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
@@ -201,6 +203,29 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         ),
       );
     }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("buffers changes after a subscription is acquired but before it is consumed", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const changes = yield* serverSettings.subscribeChanges;
+
+        yield* serverSettings.updateSettings({
+          providers: {
+            codex: {
+              binaryPath: "/usr/local/bin/codex-next",
+            },
+          },
+        });
+
+        const firstChange = yield* changes.pipe(Stream.runHead, Effect.timeout("1 second"));
+        assert.equal(
+          Option.getOrUndefined(firstChange)?.providers.codex.binaryPath,
+          "/usr/local/bin/codex-next",
+        );
+      }),
+    ).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
   it.effect("preserves model when switching providers via textGenerationModelSelection", () =>
@@ -462,6 +487,65 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("folds a legacy in-config enabled flag into the envelope on load", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      // Old settings files can carry both flags with conflicting values.
+      // The explicit false must win so a user's disable sticks.
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"providerInstances":{"grok":{"driver":"grok","enabled":true,"config":{"enabled":false}},"codex_work":{"driver":"codex","config":{"enabled":true,"homePath":"~/.codex"}},"cursor":{"driver":"cursor","config":{"enabled":"nope"}}}}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+
+      const grokId = ProviderInstanceId.make("grok");
+      const codexWorkId = ProviderInstanceId.make("codex_work");
+      assert.deepEqual(settings.providerInstances[grokId], {
+        driver: ProviderDriverKind.make("grok"),
+        enabled: false,
+        config: {},
+      });
+      // A lone in-config flag is lifted to the envelope and stripped.
+      assert.deepEqual(settings.providerInstances[codexWorkId], {
+        driver: ProviderDriverKind.make("codex"),
+        enabled: true,
+        config: { homePath: "~/.codex" },
+      });
+      // A malformed flag is left alone so driver schema validation can
+      // surface it instead of the fold silently repairing the config.
+      assert.deepEqual(settings.providerInstances[ProviderInstanceId.make("cursor")], {
+        driver: ProviderDriverKind.make("cursor"),
+        config: { enabled: "nope" },
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("folds in-config enabled flags arriving through updates", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const grokId = ProviderInstanceId.make("grok");
+
+      const next = yield* serverSettings.updateSettings({
+        providerInstances: {
+          [grokId]: {
+            driver: ProviderDriverKind.make("grok"),
+            enabled: true,
+            config: { enabled: false, binaryPath: "/opt/grok" },
+          },
+        },
+      });
+
+      assert.deepEqual(next.providerInstances[grokId], {
+        driver: ProviderDriverKind.make("grok"),
+        enabled: false,
+        config: { binaryPath: "/opt/grok" },
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("trims provider path settings when updates are applied", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -499,7 +583,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         launchArgs: "",
       });
       assert.deepEqual(next.providers.opencode, {
-        enabled: true,
+        // OpenCode is disabled by default; this update only touches paths.
+        enabled: false,
         binaryPath: "/opt/homebrew/bin/opencode",
         serverUrl: "http://127.0.0.1:4096",
         serverPassword: "secret-password",
@@ -588,6 +673,14 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           opencode: {
             serverUrl: "http://127.0.0.1:4096",
             serverPassword: "secret-password",
+          },
+        },
+        backgroundActivity: {
+          schemaVersion: 1,
+          profile: "custom",
+          baseProfile: "balanced",
+          overrides: {
+            automaticGitFetchInterval: 10_000,
           },
         },
         automaticGitFetchInterval: 10_000,

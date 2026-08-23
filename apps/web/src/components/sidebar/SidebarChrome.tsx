@@ -1,16 +1,23 @@
-import { useAtomValue } from "@effect/atom-react";
-import { ActivityIcon, BotIcon, SettingsIcon, UsersIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  ActivityIcon,
+  ArrowLeftIcon,
+  BotIcon,
+  ChartNoAxesColumnIcon,
+  GitPullRequestIcon,
+  SettingsIcon,
+  UsersIcon,
+} from "lucide-react";
+import type { ReactNode } from "react";
+import { memo, useCallback } from "react";
+import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { serverEnvironment } from "../../state/server";
-import { useAtomCommand } from "../../state/use-atom-command";
+import { useEnvironments } from "../../state/environments";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
+  resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
@@ -24,8 +31,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
-import { SidebarUpdatePill } from "./SidebarUpdatePill";
+import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -55,7 +63,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         className={cn(
           "relative z-10 md:hidden",
           backdropVariant &&
-            "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
+            "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
+          backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
       <SidebarBrand onBackdrop={backdropVariant !== null} />
@@ -78,7 +87,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     <Link
       aria-label="Go to threads"
       className={cn(
-        "sidebar-brand relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
         onBackdrop ? "text-white" : "text-foreground",
       )}
       to="/"
@@ -86,7 +95,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       <T3Wordmark />
       <span
         className={cn(
-          "truncate text-sm font-medium tracking-tight",
+          "-translate-y-px truncate text-sm font-medium tracking-tight",
           onBackdrop ? "text-white/70" : "text-muted-foreground",
         )}
       >
@@ -112,104 +121,149 @@ function T3Wordmark() {
   );
 }
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
-  const navigate = useNavigate();
-  const { isMobile, setOpenMobile } = useSidebar();
-  const environmentId = usePrimaryEnvironmentId();
-  const getUsage = useAtomCommand(serverEnvironment.codingUsageGetReport, { reportFailure: false });
-  const [usage, setUsage] = useState<{
-    readonly totalTokens: number;
-    readonly totalCost: number;
-  } | null>(null);
-  const handleSettingsClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/settings" });
-  }, [isMobile, navigate, setOpenMobile]);
-  const handleHermesClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/hermes" });
-  }, [isMobile, navigate, setOpenMobile]);
-  const handleCodexAccountsClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/codex-accounts" });
-  }, [isMobile, navigate, setOpenMobile]);
-  const handleUsageClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/usage" });
-  }, [isMobile, navigate, setOpenMobile]);
+function SidebarUtilityItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <SidebarMenuItem className="shrink-0">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+              {icon}
+            </SidebarMenuButton>
+          }
+        />
+        <TooltipPopup side="top">{label}</TooltipPopup>
+      </Tooltip>
+    </SidebarMenuItem>
+  );
+}
 
-  useEffect(() => {
-    if (environmentId === null) return;
-    void getUsage({ environmentId, input: {} }).then((result) => {
-      if (result._tag !== "Success") return;
-      const today = result.value.daily.at(-1);
-      if (today) {
-        setUsage({ totalTokens: today.totalTokens, totalCost: today.totalCost });
-      }
-    });
-  }, [environmentId, getUsage]);
+export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+  const navigate = useNavigate();
+  const canGoBack = useCanGoBack();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const currentFooterPage = useLocation({
+    select: (location) =>
+      /^\/settings(?:\/|$)/.test(location.pathname)
+        ? "settings"
+        : location.pathname === "/usage"
+          ? "usage"
+          : location.pathname === "/coding-usage"
+            ? "coding-usage"
+            : location.pathname === "/pull-requests"
+              ? "pull-requests"
+              : location.pathname === "/hermes"
+                ? "hermes"
+                : location.pathname === "/codex-accounts"
+                  ? "codex-accounts"
+                  : null,
+  });
+  const { environments } = useEnvironments();
+  // The page reads every connected server, so one of them offering pull requests is enough for
+  // the link to lead somewhere.
+  const pullRequestsSupported = environments.some(
+    (environment) => environment.serverConfig?.environment.capabilities.pullRequests === true,
+  );
+  const closeMobileSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+  const handlePullRequestsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
+  }, [closeMobileSidebar, navigate]);
+  const handleSettingsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings" });
+  }, [closeMobileSidebar, navigate]);
+
+  const handleUsageClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/usage" });
+  }, [closeMobileSidebar, navigate]);
+  const handleHermesClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/hermes" });
+  }, [closeMobileSidebar, navigate]);
+  const handleCodingUsageClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/coding-usage" });
+  }, [closeMobileSidebar, navigate]);
+  const handleCodexAccountsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/codex-accounts" });
+  }, [closeMobileSidebar, navigate]);
+
+  const handleBackClick = useCallback(() => {
+    closeMobileSidebar();
+    if (canGoBack) {
+      window.history.back();
+      return;
+    }
+    void navigate({ to: "/" });
+  }, [canGoBack, closeMobileSidebar, navigate]);
 
   return (
-    <SidebarFooter className="p-2">
-      <SidebarProviderUpdatePill />
-      <SidebarUpdatePill />
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            className="h-auto items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-            onClick={handleUsageClick}
-          >
-            <ActivityIcon className="size-4.5 shrink-0" />
-            <span className="grid text-left">
-              <span>Today</span>
-              {usage ? (
-                <span className="text-[11px] font-normal text-sidebar-muted-foreground">
-                  {(usage.totalTokens / 1_000_000).toFixed(1)}M · ${usage.totalCost.toFixed(2)}
-                </span>
-              ) : null}
-            </span>
+    <SidebarMenu className="flex-row items-center">
+      {currentFooterPage ? (
+        <SidebarMenuItem className="min-w-0 flex-1">
+          <SidebarMenuButton onClick={handleBackClick}>
+            <ArrowLeftIcon />
+            <span>Back</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-            onClick={handleHermesClick}
-          >
-            <BotIcon className="size-4.5 shrink-0" />
-            <span>Hermes</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-            onClick={handleCodexAccountsClick}
-          >
-            <UsersIcon className="size-4.5 shrink-0" />
-            <span>Accounts</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+      ) : (
+        <>
+          <SidebarUtilityItem
+            icon={<SettingsIcon />}
+            label="Settings"
             onClick={handleSettingsClick}
-          >
-            <SettingsIcon className="size-4.5 shrink-0" />
-            <span>Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
+          />
+          {pullRequestsSupported ? (
+            <SidebarUtilityItem
+              icon={<GitPullRequestIcon />}
+              label="Pull Requests"
+              onClick={handlePullRequestsClick}
+            />
+          ) : null}
+          <SidebarUtilityItem
+            icon={<ChartNoAxesColumnIcon />}
+            label="Usage"
+            onClick={handleUsageClick}
+          />
+          <SidebarUtilityItem
+            icon={<ActivityIcon />}
+            label="Coding Usage"
+            onClick={handleCodingUsageClick}
+          />
+          <SidebarUtilityItem icon={<BotIcon />} label="Hermes" onClick={handleHermesClick} />
+          <SidebarUtilityItem
+            icon={<UsersIcon />}
+            label="Codex Accounts"
+            onClick={handleCodexAccountsClick}
+          />
+        </>
+      )}
+      <SidebarUpdatePill />
+    </SidebarMenu>
+  );
+});
+
+export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+  return (
+    <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+      <SidebarProviderUpdatePill />
+      <SidebarUpdateArchitectureWarning />
+      <SidebarUtilityMenu />
     </SidebarFooter>
   );
 });

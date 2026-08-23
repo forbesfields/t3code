@@ -5,6 +5,7 @@ import { ChatWorkspace } from "../components/ChatWorkspace";
 import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
 import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "../threadRoutes";
+import { resolveThreadSyncPhase } from "../threadSync";
 import { SidebarInset } from "~/components/ui/sidebar";
 import {
   useEnvironmentThreadRefs,
@@ -48,6 +49,11 @@ function ChatThreadRouteView() {
     serverThreadDetailDeleted: serverThreadStatus === "deleted",
     draftThreadExists,
   });
+  const threadSyncPhase = resolveThreadSyncPhase({
+    detailExists: serverThreadDetail !== null,
+    shellExists: serverThreadShell !== null,
+    status: serverThreadStatus,
+  });
   const serverThreadStarted = threadHasStarted(serverThreadDetail);
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
 
@@ -68,24 +74,26 @@ function ChatThreadRouteView() {
     finalizePromotedDraftThreadByRef(threadRef);
   }, [draftThread, serverThreadStarted, threadRef]);
 
-  if (!threadRef || renderState !== "ready") {
+  if (!threadRef) {
     return null;
   }
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
-      <ChatWorkspace
-        threadRef={threadRef}
-        onNavigate={(nextThreadRef) => {
-          void navigate({
-            to: "/$environmentId/$threadId",
-            params: {
-              environmentId: nextThreadRef.environmentId,
-              threadId: nextThreadRef.threadId,
-            },
-          });
-        }}
-      />
+      {renderState === "ready" || (renderState === "loading" && serverThreadShell !== null) ? (
+        <ChatWorkspace
+          threadRef={threadRef}
+          onNavigate={(nextThreadRef) => {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: nextThreadRef.environmentId,
+                threadId: nextThreadRef.threadId,
+              },
+            });
+          }}
+        />
+      ) : null}
     </SidebarInset>
   );
 }

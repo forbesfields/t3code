@@ -12,11 +12,106 @@ import {
 } from "@t3tools/contracts";
 
 import {
+  buildPendingUserInputAnswers,
   buildThreadFeed,
   deriveThreadFeedPresentation,
+  isPendingUserInputOptionSelected,
+  setPendingUserInputCustomAnswer,
+  togglePendingUserInputOptionSelection,
   type ThreadFeedActivity,
   type ThreadFeedEntry,
 } from "./threadActivity";
+
+const singleSelectQuestion = {
+  id: "runtime",
+  header: "Runtime",
+  question: "Which runtime should be used?",
+  options: [
+    { label: "Go", description: "One binary" },
+    { label: "Node.js", description: "Reuse TypeScript" },
+  ],
+  multiSelect: false,
+} as const;
+
+const multiSelectQuestion = {
+  id: "scope",
+  header: "Scope",
+  question: "Which data should be collected?",
+  options: [
+    { label: "Orders", description: "Receipts" },
+    { label: "Listings", description: "Inventory" },
+  ],
+  multiSelect: true,
+} as const;
+
+describe("pending user input answers", () => {
+  it("replaces single-select options and toggles multi-select options", () => {
+    expect(
+      togglePendingUserInputOptionSelection(
+        singleSelectQuestion,
+        { selectedOptionLabels: ["Go"] },
+        "Node.js",
+      ),
+    ).toEqual({ customAnswer: "", selectedOptionLabels: ["Node.js"] });
+
+    const orders = togglePendingUserInputOptionSelection(multiSelectQuestion, undefined, "Orders");
+    const ordersAndListings = togglePendingUserInputOptionSelection(
+      multiSelectQuestion,
+      orders,
+      "Listings",
+    );
+    expect(ordersAndListings).toEqual({
+      customAnswer: "",
+      selectedOptionLabels: ["Orders", "Listings"],
+    });
+    expect(
+      togglePendingUserInputOptionSelection(multiSelectQuestion, ordersAndListings, "Orders"),
+    ).toEqual({ customAnswer: "", selectedOptionLabels: ["Listings"] });
+
+    const paddedOrders = togglePendingUserInputOptionSelection(
+      multiSelectQuestion,
+      undefined,
+      "  Orders  ",
+    );
+    expect(paddedOrders).toEqual({ customAnswer: "", selectedOptionLabels: ["Orders"] });
+    expect(
+      togglePendingUserInputOptionSelection(multiSelectQuestion, paddedOrders, "  Orders  "),
+    ).toEqual({ customAnswer: "" });
+  });
+
+  it("builds array answers for multi-select questions", () => {
+    expect(
+      buildPendingUserInputAnswers([singleSelectQuestion, multiSelectQuestion], {
+        runtime: { selectedOptionLabels: ["Go"] },
+        scope: { selectedOptionLabels: ["Orders", "Listings"] },
+      }),
+    ).toEqual({
+      runtime: "Go",
+      scope: ["Orders", "Listings"],
+    });
+  });
+
+  it("clears selected options while a custom answer is active", () => {
+    expect(
+      setPendingUserInputCustomAnswer(
+        { selectedOptionLabels: ["Orders", "Listings"] },
+        "Orders first",
+      ),
+    ).toEqual({ customAnswer: "Orders first" });
+  });
+
+  it("matches selected chips against normalized option labels", () => {
+    expect(
+      isPendingUserInputOptionSelected({ selectedOptionLabels: ["Orders"] }, "  Orders  "),
+    ).toBe(true);
+    expect(
+      isPendingUserInputOptionSelected(
+        { selectedOptionLabels: ["Orders"], customAnswer: "Orders first" },
+        "  Orders  ",
+      ),
+    ).toBe(false);
+  });
+});
 
 function makeActivity(
   input: Partial<OrchestrationThreadActivity> &
@@ -276,7 +371,7 @@ describe("buildThreadFeed", () => {
     expect(serializedToolOutputs).toBe(1);
   });
 
-  it("folds settled turn work while leaving the terminal answer visible", () => {
+  it("keeps the first and terminal assistant messages visible around settled work", () => {
     const turnId = TurnId.make("turn-1");
     const thread = makeThread({
       id: ThreadId.make("thread-3"),
@@ -292,9 +387,9 @@ describe("buildThreadFeed", () => {
       },
       messages: [
         {
-          id: MessageId.make("assistant-commentary"),
+          id: MessageId.make("assistant-first"),
           role: "assistant",
-          text: "I am checking.",
+          text: "Synthetic deployment checklist\n1. Confirm the deployment is ready.",
           turnId,
           streaming: false,
           createdAt: "2026-04-01T00:00:02.000Z",
@@ -329,8 +424,12 @@ describe("buildThreadFeed", () => {
 
     const feed = buildThreadFeed(thread);
     const collapsed = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
-    expect(collapsed.map((entry) => entry.id)).toEqual(["turn-fold:turn-1", "assistant-final"]);
-    expect(collapsed[0]).toMatchObject({
+    expect(collapsed.map((entry) => entry.id)).toEqual([
+      "assistant-first",
+      "turn-fold:turn-1",
+      "assistant-final",
+    ]);
+    expect(collapsed[1]).toMatchObject({
       type: "turn-fold",
       label: "Worked for 17s",
       expanded: false,
@@ -338,9 +437,64 @@ describe("buildThreadFeed", () => {
 
     const expanded = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set([turnId]));
     expect(expanded.map((entry) => entry.id)).toEqual([
+      "assistant-first",
       "turn-fold:turn-1",
-      "assistant-commentary",
       "tool-completed",
+      "assistant-final",
+    ]);
+  });
+
+  it("folds assistant messages between the first and terminal messages", () => {
+    const turnId = TurnId.make("turn-1");
+    const thread = makeThread({
+      id: ThreadId.make("thread-middle-message"),
+      projectId: ProjectId.make("project-1"),
+      title: "Bounded narration",
+      latestTurn: {
+        turnId,
+        state: "completed",
+        requestedAt: "2026-04-01T00:00:00.000Z",
+        startedAt: "2026-04-01T00:00:01.000Z",
+        completedAt: "2026-04-01T00:00:06.000Z",
+        assistantMessageId: MessageId.make("assistant-final"),
+      },
+      messages: [
+        {
+          id: MessageId.make("assistant-first"),
+          role: "assistant",
+          text: "The main result is ready.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:01.000Z",
+          updatedAt: "2026-04-01T00:00:02.000Z",
+        },
+        {
+          id: MessageId.make("assistant-middle"),
+          role: "assistant",
+          text: "I am checking one more detail.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:03.000Z",
+          updatedAt: "2026-04-01T00:00:04.000Z",
+        },
+        {
+          id: MessageId.make("assistant-final"),
+          role: "assistant",
+          text: "Verification finished.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:05.000Z",
+          updatedAt: "2026-04-01T00:00:06.000Z",
+        },
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const rows = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
+
+    expect(rows.map((entry) => entry.id)).toEqual([
+      "assistant-first",
+      "turn-fold:turn-1",
       "assistant-final",
     ]);
   });
@@ -530,5 +684,41 @@ describe("buildThreadFeed", () => {
       type: "work-toggle",
       expanded: true,
     });
+  });
+});
+
+describe("quiet timeline: nested agents", () => {
+  it("keeps a nested agent's terminal row but hides its background work", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-nested"),
+      projectId: ProjectId.make("project-1"),
+      title: "Nested agents",
+      activities: [
+        // A subagent's own shell: internal, covered by the owner's liveness.
+        makeActivity({
+          id: EventId.make("shell-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: { taskId: "sh-1", agentId: "owner", agentKind: "background" },
+        }),
+        // A nested AGENT's completion: mobile has no Agents sheet, so this
+        // terminal row is the only signal it ever finished.
+        makeActivity({
+          id: EventId.make("nested-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          payload: { taskId: "n-1", agentId: "owner", agentKind: "agent" },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const ids = feed.flatMap((entry) =>
+      entry.type === "activity-group" ? entry.activities.map((row) => row.id) : [],
+    );
+    expect(ids).toContain("nested-done");
+    expect(ids).not.toContain("shell-done");
   });
 });

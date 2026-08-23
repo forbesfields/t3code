@@ -96,8 +96,9 @@ function getSelectedTraits(
   prompt: string,
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
+  planModeEnabled: boolean,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider);
+  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
   const descriptors = getProviderOptionDescriptors({
     caps,
     selections: modelOptions,
@@ -134,8 +135,6 @@ function getSelectedTraits(
       : getDescriptorStringValue(primarySelectDescriptor)) ?? null;
   const thinkingEnabled =
     typeof thinkingDescriptor?.currentValue === "boolean" ? thinkingDescriptor.currentValue : null;
-  const fastModeEnabled =
-    typeof fastModeDescriptor?.currentValue === "boolean" ? fastModeDescriptor.currentValue : false;
   const contextWindow = getDescriptorStringValue(contextWindowDescriptor);
   const selectedAgent = getDescriptorStringValue(agentDescriptor);
   const selectedAgentLabel = agentDescriptor
@@ -154,7 +153,6 @@ function getSelectedTraits(
     thinkingDescriptor,
     effort,
     thinkingEnabled,
-    fastModeEnabled,
     contextWindow,
     ultrathinkPromptControlled,
     ultrathinkInBodyText,
@@ -170,6 +168,7 @@ function getTraitsSectionVisibility(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -178,6 +177,7 @@ function getTraitsSectionVisibility(input: {
     input.prompt,
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
+    input.planModeEnabled,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;
@@ -204,6 +204,7 @@ export function shouldRenderTraitsControls(input: {
   prompt: string;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
 }): boolean {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
@@ -217,6 +218,7 @@ export interface TraitsMenuContentProps {
   onPromptChange: (prompt: string) => void;
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
+  planModeEnabled: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
 }
@@ -230,6 +232,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  planModeEnabled,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -266,6 +269,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     prompt,
     modelOptions,
     allowPromptInjectedEffort,
+    planModeEnabled,
   });
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
@@ -326,18 +330,28 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                     key={option.id}
                     value={option.id}
                     hideIndicator
+                    // Base UI keeps radio menus open by default. Close on pick so
+                    // the traits menu behaves like the model picker.
+                    closeOnClick
                     disabled={ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id}
                   >
-                    <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span className="min-w-0 truncate">
-                        {option.label}
-                        {option.isDefault ? (
-                          <>
-                            {" "}
-                            <DefaultBadge />
-                          </>
-                        ) : null}
+                    <span className="flex w-full min-w-0 flex-col">
+                      <span className="flex w-full min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 truncate">
+                          {option.label}
+                          {option.isDefault ? (
+                            <>
+                              {" "}
+                              <DefaultBadge />
+                            </>
+                          ) : null}
+                        </span>
                       </span>
+                      {option.description ? (
+                        <span className="max-w-56 text-pretty text-muted-foreground/80 text-xs">
+                          {option.description}
+                        </span>
+                      ) : null}
                     </span>
                   </MenuRadioItem>
                 ))}
@@ -365,7 +379,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                 }}
               >
                 {(["on", "off"] as const).map((value) => (
-                  <MenuRadioItem key={value} value={value} hideIndicator>
+                  <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
                     <span className="flex w-full min-w-0 items-center justify-between gap-3">
                       <span>{value === "on" ? "On" : "Off"}</span>
                     </span>
@@ -382,23 +396,41 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
 
 /**
  * Build the traits trigger's text label plus whether the fast-mode bolt should
- * render. Fast mode is a lightning bolt when on and nothing at all when off —
- * "Normal" is the near-universal case and isn't worth the horizontal space. The
- * one exception is when fast mode is the only trait, where a bare bolt (or bare
- * chevron) would leave the trigger unreadable.
+ * render. Claude and Cursor expose fast mode as a boolean, while Codex exposes
+ * it through the Standard/Fast service tiers. In either form, fast mode is a
+ * lightning bolt when on and nothing at all when off. The one exception is when
+ * fast mode is the only trait, where a bare bolt (or bare chevron) would leave
+ * the trigger unreadable.
  */
 export function buildTraitsTriggerDisplay(input: {
+  provider: ProviderDriverKind;
   descriptors: ReadonlyArray<ProviderOptionDescriptor>;
   primarySelectDescriptorId: string | null;
   ultrathinkPromptControlled: boolean;
-  fastModeEnabled: boolean;
 }): { label: string; showFastModeIcon: boolean } {
-  let hasFastMode = false;
+  let fastModeFallbackLabel: string | null = null;
+  let fastModeEnabled = false;
   const labels: Array<string> = [];
   for (const descriptor of input.descriptors) {
     if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      hasFastMode = true;
+      fastModeEnabled = descriptor.currentValue === true;
+      fastModeFallbackLabel = fastModeEnabled ? "Fast" : "Normal";
       continue;
+    }
+    if (
+      input.provider === "codex" &&
+      descriptor.id === "serviceTier" &&
+      descriptor.type === "select"
+    ) {
+      const currentValue = getProviderOptionCurrentValue(descriptor);
+      const fastTier = descriptor.options.find(({ label }) => label === "Fast");
+      if (fastTier && (currentValue === "default" || currentValue === fastTier.id)) {
+        fastModeEnabled = currentValue === fastTier.id;
+        fastModeFallbackLabel =
+          descriptor.options.find(({ id }) => id === currentValue)?.label ??
+          (fastModeEnabled ? "Fast" : "Normal");
+        continue;
+      }
     }
     const label =
       input.ultrathinkPromptControlled && descriptor.id === input.primarySelectDescriptorId
@@ -414,10 +446,10 @@ export function buildTraitsTriggerDisplay(input: {
   // Only fall back to text when fast mode is genuinely the sole trait. Keying
   // off an empty label list alone would also catch descriptors that resolved to
   // no label at all, printing a bogus "Normal" for a model without fast mode.
-  if (labels.length === 0 && hasFastMode) {
-    return { label: input.fastModeEnabled ? "Fast" : "Normal", showFastModeIcon: false };
+  if (labels.length === 0 && fastModeFallbackLabel !== null) {
+    return { label: fastModeFallbackLabel, showFastModeIcon: false };
   }
-  return { label: labels.join(" · "), showFastModeIcon: input.fastModeEnabled };
+  return { label: labels.join(" · "), showFastModeIcon: fastModeEnabled };
 }
 
 export const TraitsPicker = memo(function TraitsPicker({
@@ -429,12 +461,13 @@ export const TraitsPicker = memo(function TraitsPicker({
   onPromptChange,
   modelOptions,
   allowPromptInjectedEffort = true,
+  planModeEnabled,
   triggerVariant,
   triggerClassName,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled, fastModeEnabled } =
+  const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
       models,
@@ -442,6 +475,7 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      planModeEnabled,
     });
   if (
     !shouldRenderTraitsControls({
@@ -451,20 +485,27 @@ export const TraitsPicker = memo(function TraitsPicker({
       prompt,
       modelOptions,
       allowPromptInjectedEffort,
+      planModeEnabled,
     })
   ) {
     return null;
   }
 
   const { label: triggerLabel, showFastModeIcon } = buildTraitsTriggerDisplay({
+    provider,
     descriptors,
     primarySelectDescriptorId: primarySelectDescriptor?.id ?? null,
     ultrathinkPromptControlled,
-    fastModeEnabled,
   });
   const fastModeIcon = showFastModeIcon ? (
     <>
-      <ComposerControlIcon icon={ZapIcon} className="text-foreground/80 opacity-100" />
+      <ComposerControlIcon
+        icon={ZapIcon}
+        className={cn(
+          "fill-current opacity-80",
+          provider === "claudeAgent" ? "text-[#d97757]" : "text-foreground",
+        )}
+      />
       <span className="sr-only">Fast mode on</span>
     </>
   ) : null;
@@ -515,6 +556,7 @@ export const TraitsPicker = memo(function TraitsPicker({
           onPromptChange={onPromptChange}
           modelOptions={modelOptions}
           allowPromptInjectedEffort={allowPromptInjectedEffort}
+          planModeEnabled={planModeEnabled}
           {...persistence}
         />
       </MenuPopup>

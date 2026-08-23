@@ -3,6 +3,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeAntigravityTextGeneration } from "../../textGeneration/AntigravityTextGeneration.ts";
@@ -31,7 +32,10 @@ const DRIVER_KIND = ProviderDriverKind.make("antigravity");
 const decodeSettings = Schema.decodeSync(AntigravitySettings);
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
-export type AntigravityDriverEnv = ServerConfig | ServerSettingsService;
+export type AntigravityDriverEnv =
+  | BackgroundPolicy.BackgroundPolicy
+  | ServerConfig
+  | ServerSettingsService;
 
 const stampIdentity =
   (input: {

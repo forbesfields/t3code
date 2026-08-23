@@ -3,6 +3,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makePiTextGeneration } from "../../textGeneration/PiTextGeneration.ts";
@@ -27,7 +28,7 @@ const DRIVER_KIND = ProviderDriverKind.make("pi");
 const decodeSettings = Schema.decodeSync(PiSettings);
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
-export type PiDriverEnv = ServerConfig | ServerSettingsService;
+export type PiDriverEnv = BackgroundPolicy.BackgroundPolicy | ServerConfig | ServerSettingsService;
 
 const stampIdentity =
   (input: {

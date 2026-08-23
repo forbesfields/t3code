@@ -1,11 +1,7 @@
 import { expect, it } from "@effect/vitest";
-import * as NodeZlib from "node:zlib";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
-import { HttpServerResponse } from "effect/unstable/http";
 import { describe } from "vite-plus/test";
 
-import { compressHttpResponse, isLoopbackHostname, resolveDevRedirectUrl } from "./http.ts";
+import { assetResponseHeaders, isLoopbackHostname, resolveDevRedirectUrl } from "./http.ts";
 
 describe("http dev routing", () => {
   it("treats localhost and loopback addresses as local", () => {
@@ -31,48 +27,32 @@ describe("http dev routing", () => {
   });
 });
 
-describe("http compression", () => {
-  it.effect("gzips large JSON responses when the client accepts it", () =>
-    Effect.gen(function* () {
-      const body = `{"value":"${"compressible".repeat(1_000)}"}`;
-      const response = compressHttpResponse(
-        HttpServerResponse.text(body, { contentType: "application/json" }),
-        "br, gzip, deflate",
-      );
-
-      expect(response.headers["content-encoding"]).toBe("gzip");
-      expect(response.headers["content-length"]).toBeUndefined();
-      expect(response.headers.vary).toBe("Accept-Encoding");
-      expect(response.body._tag).toBe("Stream");
-      if (response.body._tag === "Stream") {
-        const chunks = yield* Stream.runCollect(Stream.orDie(response.body.stream));
-        expect(NodeZlib.gunzipSync(Buffer.concat(Array.from(chunks))).toString()).toBe(body);
-      }
-    }),
-  );
-
-  it("keeps the original body when gzip is declined", () => {
-    const response = compressHttpResponse(
-      HttpServerResponse.text("x".repeat(2_000), { contentType: "application/json" }),
-      "gzip;q=0, *;q=1",
+describe("assetResponseHeaders", () => {
+  it("sandboxes SVG assets", () => {
+    expect(assetResponseHeaders("/attachments/user-image.svg")).toMatchObject({
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "X-Content-Type-Options": "nosniff",
+    });
+    expect(assetResponseHeaders("/attachments/user-image.SVG")).toHaveProperty(
+      "Content-Security-Policy",
     );
-
-    expect(response.headers["content-encoding"]).toBeUndefined();
-    expect(response.headers["content-length"]).toBe("2000");
-    expect(response.headers.vary).toBe("Accept-Encoding");
   });
 
-  it("preserves existing Vary semantics", () => {
-    const makeResponse = (vary: string) =>
-      compressHttpResponse(
-        HttpServerResponse.text("x".repeat(2_000), {
-          contentType: "application/json",
-          headers: { vary },
-        }),
-        undefined,
-      );
+  it("does not apply document policy to raster images", () => {
+    expect(assetResponseHeaders("/attachments/user-image.png")).toEqual({
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
 
-    expect(makeResponse("*").headers.vary).toBe("*");
-    expect(makeResponse("Origin, accept-encoding").headers.vary).toBe("Origin, accept-encoding");
+  it("declares utf-8 for HTML assets so non-ASCII content renders correctly", () => {
+    expect(assetResponseHeaders("/workspace/page.html")).toHaveProperty(
+      "Content-Type",
+      "text/html; charset=utf-8",
+    );
+    expect(assetResponseHeaders("/workspace/PAGE.HTM")).toHaveProperty(
+      "Content-Type",
+      "text/html; charset=utf-8",
+    );
   });
 });
